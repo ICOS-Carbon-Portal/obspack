@@ -1,0 +1,70 @@
+nr;Hist;GAW_ICOS_contrib;ICOS_L12;OSCAR_ID;NOAALabNr;NOAA_Lab_name;Long_name;Country;Timezone;Institute;URL
+01;BIK;;;0-20008-0-BIK;45;Max Planck Institute for Biogeochemistry;Bialystok;Poland;1;;https://tccon-wiki.caltech.edu/Sites/Bialystok
+02;BIR;x;BIR;0-20008-0-BIR;56;Norwegian Institute for Air Research;Birkenes;Norway;1;NILU;
+03;BIS;;;0-20008-0-BIS;11;Laboratoire des Sciences du Climat et de l'Environnement - UMR8212 CEA-CNRS-UVSQ;Biscarosse;France;1;LSCE;
+04;BRM;;;;49;University of Bern, Physics Institute, Climate and Environmental Physics;Beromunster;Switzerland;1;University of Bern;
+05;BSD;;;0-20008-0-BSD;160;Atmospheric Chemistry Research Group School of Chemistry University of Bristol;Bilsdale;United Kingdom;0;University of Bristol;http://www.metoffice.gov.uk/research/monitoring/atmospheric-trends/sites/bilsdale
+06;CBW;x;;0-20008-0-CES;445;Netherlands Organisation for Applied Scientific Research;Cesar (Cabauw);Netherlands;1;TNO;http://www.cesar-database.nl
+07;CMN;x;CMN;0-20008-0-CMN;443;Institute of Atmospheric Sciences and Climate (CNR-ISAC);Monte Cimone;Italy;1;;http://www.aeronautica.difesa.it/cimone
+08;CRP;;;;137;National University of Ireland - Galway;Carnsore Point;Ireland;0;National University of Ireland, Galway (NUI);
+08a;DEC;;;;431;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;Delta de l'Ebre;Spain;1;Environmental Science and Technology Institute - Universitat Autonoma de Barcelona;
+08b;EEC;;;;431;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;El Estrecho;Spain;1;Environmental Science and Technology Institute - Universitat Autonoma de Barcelona;
+09;ERS;;;0-20008-0-ERS;11;Laboratoire des Sciences du Climat et de l'Environnement - UMR8212 CEA-CNRS-UVSQ;Ersa;France;1;;
+10;FKL;;;0-20008-0-FKL;11;Laboratoire des Sciences du Climat et de l'Environnement - UMR8212 CEA-CNRS-UVSQ;Finokalia;Greece;2;;http://finokalia.chemistry.uoc.gr/
+11;GAT;x;GAT;0-20008-0-GAT;147;Deutscher Wetterdienst;Gartow;Germany;1;German Weather Service - Meteorological Observatory at Hohenpeissenberg;https://icos-atc.lsce.ipsl.fr/panelboard/gat
+12;GIC;;;;431;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;Sierra de Gredos;Spain;1;;
+13;HEI;;;;22;University of Heidelberg, Institut fuer Umweltphysik;Heidelberg;Germany;1;Heidelberg University;
+14;HEL;x;HEL;0-276-0-HEL;147;Deutscher Wetterdienst;Helgoland;Germany;1;German Weather Service - Meteorological Observatory at Hohenpeissenberg;
+15;HPB;x;HPB;0-20008-0-HPB;147;Deutscher Wetterdienst;Hohenpeissenberg;Germany;1;Deutscher Wetterdienst;www.dwd.de/mohp
+16;HTM;x;HTM;0-20008-0-HTM;424;Lund University - Centre for Environmental and Climate Research;Hyltemossa;Sweden;1;Lund University, Department of Earth and Ecosystem Sciences;http://www.icos-sweden.se/station_hyltemossa.html
+17;HUN;x;;0-20008-0-HUN;35;Hungarian Meteorological Service;Hegyhatsal;Hungary;1;Institute for Nuclear Research;http://nimbus.elte.hu/hhs
+18;IPR;x;IPR;0-20008-0-IPR;103;Joint Research Centre;Ispra;Italy;1;European Commission Joint Research Centre Ispra;http://abc-is.jrc.ec.europa.eu/index.php
+19;IVI;;;;11;Laboratoire des Sciences du Climat et de l'Environnement - UMR8212 CEA-CNRS-UVSQ;Ivittuut;Denmark;-3;;!https://ramces.lsce.ipsl.fr/index.php?option=com_content&task=view&id=36&Itemid=56
+20;IZO;;;0-20008-0-IZO;27;Izana Atmospheric Research Center, Meteorological State Agency of Spain;Izaña (Tenerife);Spain;0;Centro de Investigacion Atmosférica de Izaña - AEMET;http://izana.aemet.es/
+21;JFJ;x;JFJ;0-20008-0-JFJ;49;University of Bern, Physics Institute, Climate and Environmental Physics;Jungfraujoch;Switzerland;1;;www.ifjungo.ch
+22;JUE;x;JUE;0-20008-0-JUE;147;Deutscher Wetterdienst;Jülich;Germany;1;German Weather Service - Meteorological Observatory at Hohenpeissenberg;
+23;KAS;;;;53;University of Science and Technology (AGH);Kasprowy Wierch, High Tatra;Poland;1;Krakow University;
+24;KIT;x;KIT;0-20008-0-KIT;39;Institute of Meteorology and Climate Research (IMK-IFU), Karlsruhe Institute of Technology (KIT);Karlsruhe;Germany;1;Karlsruhe Institute of Technology;https://tccon-wiki.caltech.edu/Sites/Karlsruhe
+25;KRE;x;KRE;0-20008-0-KRE;441;Czechglobe - Global Change Research Institute CAS;Kresin u Pacova;Czech Republic;1;;http://www.czechglobe.cz/en/home/
+26;LHW;;;;5;Swiss Federal Laboratories for Materials Science and Technology;Laegern-Hochwacht;Switzerland;1;;
+27;LIN;x;LIN;0-20008-0-LIN;147;Deutscher Wetterdienst;Lindenberg;Germany;1;;http://www.dwd.de/mol/
+28;LMP;x;LMP;0-20008-0-LMP;28;National Agency for New Technology, Energy, and Environment;Lampedusa;Italy;1;National Agency for New Technology, Energy, and Environment;www.lampedusa.enea.it
+29;LMU;;;;431;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;La Muela;Spain;1;;
+30;LUT;;LUT;0-528-0-LUT;44;Centrum Isotopen Onderzoek - Rijksuniversiteit Groningen;Lutjewad;Netherlands;1;Centrum voor Isotopen Onderzoek, Universiteit Groningen;
+31;MHD;;;0-20008-0-MHD;11;Laboratoire des Sciences du Climat et de l'Environnement - UMR8212 CEA-CNRS-UVSQ;Mace Head;Ireland;0;National University of Ireland, Galway (NUI);http://macehead.org/
+32;MLH;;;0-20008-0-MLH;468;LATMOS - (IPSL/CNRS/UVSQ/UPMC);Magny-les-Hameaux;France;1;LATMOS - (IPSL/CNRS/UVSQ/UPMC);
+33;NOR;x;NOR;0-20008-0-NOR;424;Lund University - Centre for Environmental and Climate Research;Norunda;Sweden;1;Lund University, INES;http://icos-sweden.se/station_norunda.html
+34;OHP;;;0-20008-0-OHP;468;LATMOS - (IPSL/CNRS/UVSQ/UPMC);Observatoire Haute Provence;France;1;LATMOS - (IPSL/CNRS/UVSQ/UPMC);http://www.obs-hp.fr/www/geo/geo_ohp.html
+35;OPE;;OPE;;469;Agence nationale pour la gestion des déchets radioactifs;Observatoire pérenne de l'environnement;France;1;Agence nationale pour la gestion des déchets radioactifs;
+36;OXK;x;OXK;0-20008-0-OXK;45;Max Planck Institute for Biogeochemistry;Ochsenkopf;Germany;1;Max Planck Institute for Biogeochemistry;https://www.bgc-jena.mpg.de/bgc-systems/pmwiki2/pmwiki.php/TAG/Ochsenkopf
+37;PAL;x;PAL;0-20008-0-PAL;30;Finnish Meteorological Institute;Pallas;Finland;2;Finnish Meteorological Institute;https://en.ilmatieteenlaitos.fi/pallas-atmosphere-ecosystem-supersite
+38;PDM;;PDM;0-20008-0-PDM;11;Plateforme Pyrénéenne d'Observation Atmosphérique;Pic du Midi;France;1;Observatoire Midi-Pyrenees;http://p2oa.aero.obs-mip.fr
+39;PRS;x;PRS;0-20008-0-PRS;21;Ricerca sul Sistema Energetico;Plateau Rosa;Italy;1;Ricerca sul Sistema Energetico;http://oasi.erse-web.it/
+40;PUI;;PUI;0-246-0-PUI;471;University of Eastern Finland;Puijo;Finland;2;University of Eastern Finland;https://meta.icos-cp.eu/resources/stations/ATMO_PUI
+41;PUY;x;PUY;0-20008-0-PUY;11;Laboratoire des Sciences du Climat et de l'Environnement - UMR8212 CEA-CNRS-UVSQ;Puy de Dôme;France;1;;http://wwwobs.univ-bpclermont.fr/SO/mesures/instru.php
+42;RGL;x;RGL;0-20008-0-RGL;160;Atmospheric Chemistry Research Group School of Chemistry University of Bristol;Ridge Hill;United Kingdom (the);0;;http://www.metoffice.gov.uk/research/monitoring/atmospheric-trends/sites/ridge-hill
+43;RUN;x;RUN;0-20008-0-RUN;472;Royal Belgian Institute for Space Aeronomy;La Réunion;France;4;;http://opar.univ-reunion.fr
+44;SAC;x;SAC;0-250-0-SAC;11;Laboratoire des Sciences du Climat et de l'Environnement - UMR8212 CEA-CNRS-UVSQ;Saclay;France;1;Laboratoire des Sciences du Climat et de l'Environnement;
+45;SMR;x;SMR;0-20008-0-SMR;421;University of Helsinki;Hyytiälä;Finland;2;University of Helsinki;http://www.atm.helsinki.fi/SMEAR/
+46;;;SNO;0-20008-0-SNO;464;Aarhus University;Station Nord;Denmark;-4;Aarhus University;
+47;SSL;x;SSL;0-20008-0-SSL;23;Umweltbundesamt Offenbach/University of Heidelberg, Institut fuer Umweltphysik;Schauinsland;Germany;1;Umweltbundesamt;http://www.env-it.de/umweltbundesamt/luftdaten/index.html
+48;STE;x;STE;0-20008-0-STE;147;Deutscher Wetterdienst;Steinkimmen;Germany;1;German Weather Service - Meteorological Observatory at Hohenpeissenberg;
+49;SVB;x;SVB;0-20008-0-SVB;440;Forest Ecology and Management, SLU Umeå;Svartberget;Sweden;1;;
+50;TAC;;;0-20008-0-TAC;160;Atmospheric Chemistry Research Group School of Chemistry University of Bristol;Tacolneston;United Kingdom;1;University of Bristol;http://www.metoffice.gov.uk/research/monitoring/atmospheric-trends/sites/tacolneston
+51;TIK;;;0-20008-0-TAC;55;Main Geophysical Observatory;Tikisi;Russion Federation;9;Voeikov Main Geophysical Observatory;
+52;TOH;x;TOH;0-20008-0-TOH;147;Deutscher Wetterdienst;Torfhaus;Germany;1;;
+53;TRN;x;TRN;0-20008-0-TRN;11;Laboratoire des Sciences du Climat et de l'Environnement - UMR8212 CEA-CNRS-UVSQ;Trainou (Orléans);France;1;;
+54;UTO;x;UTO;0-20008-0-UTO;30;Finnish Meteorological Institute;Utö;Finland;2;;
+55;WAO;x;WAO;0-20008-0-WAO;13;University of East Anglia;Weybourne Atmospheric Observatory;United Kingdom (the);0;University of East Anglia;https://www.ncas.ac.uk/index.php/en/the-facility-amf/256-amf-main-category/amf
+56;WES;x;WES;0-20008-0-WES;25;Umweltbundesamt;Westerland;Germany;1;UBA Germany (Federal Environmental Agency);
+58;ZEP;x;ZEP;0-20008-0-ZEP;56;Norwegian Institute for Air Research;Zeppelin Mountain (Ny Alesund);Norway;1;NILU;http://www.npolar.no/en/about-us/stations-vessels/zeppelin/
+59;ZSF;x;ZSF;0-20008-0-ZSF;25;Umweltbundesamt;Zugspitze-Schneefernerhaus;Germany;1;Umweltbundesamt;www.schneefernerhaus.de
+60;CRA;;;;473;Centre d'Aerologie;Centre de Recherches Atmosphériques;France;1;;
+61;ROC;;;;11;Laboratoire des Sciences du Climat et de l'Environnement;Roc'h Trédudon;France;1;;
+62;SNO;;;;474;Aarhus University;Station Nord;Denmark;1;;
+63;ZUG;;ZUG;0-20008-0-ZUG;25;Umweltbundesamt;Zugspitze;Germany;1;Umweltbundesamt;
+64;JAR;;;;475;Estonian University of Life Sciences, Institute of Forestry and Engineering;Järvselja;Estonia;2;Estonian University of Life Sciences, Institute of Forestry and Engineering;https://mi.emu.ee/en/
+65;SGC;;;;431;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;Sierra de Grazalema;Spain;1;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;https://portalrecerca.uab.cat/en
+66;VAC;;;;431;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;Valderejo;Spain;1;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;https://portalrecerca.uab.cat/en
+67;HFD;;;0-20008-0-HFD;476;National Physics Laboratory;Heathfield;United Kingdom;0;National Physics Laboratory;https://www.npl.co.uk/
+68;ZOT;;;;45;Max Planck Institute for Biogeochemistry;Zotino;Russian Federation;6;Max Planck Institute for Biogeochemistry;

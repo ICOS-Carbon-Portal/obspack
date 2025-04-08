@@ -1,0 +1,256 @@
+LabNr;LabShortName;LabLongName;Country
+1;NOAA;NOAA Global Monitoring Laboratory;United States
+2;CSIRO;CSIRO Oceans and Atmosphere, Climate Science Centre - GASLAB;Australia
+3;NCAR;National Center For Atmospheric Research;United States
+4;SIO;Scripps Institution of Oceanography;United States
+5;EMPA;Swiss Federal Laboratories for Materials Science and Technology;Switzerland
+6;ECCC;Environment and Climate Change Canada;Canada
+7;INSTAAR-SIL;INSTAAR Stable Isotope Laboratory;United States
+8;TU;Center for Atmospheric and Oceanic Studies, Tohoku University;Japan
+9;NIPR;National Institute of Polar Research;Japan
+10;MRI;Meteorological Research Institute;Japan
+11;LSCE;Laboratoire des Sciences du Climat et de l'Environnement - UMR8212 CEA-CNRS-UVSQ;France
+12;IOS;Institute of Ocean Sciences;Canada
+13;UEA;University of East Anglia;United Kingdom
+15;NIWA;National Institute of Water and Atmospheric Research;New Zealand
+17;IAFMC;Italian Air Force Mountain Centre;Italy
+18;PU;Purdue University;United States
+19;JMA;Japan Meteorological Agency;Japan
+20;NIES;National Institute for Environmental Studies;Japan
+21;RSE;Ricerca sul Sistema Energetico;Italy
+22;UHEI-IUP;University of Heidelberg, Institut fuer Umweltphysik;Germany
+23;UBA/UHEI-IUP;Umweltbundesamt Offenbach/University of Heidelberg, Institut fuer Umweltphysik;Germany
+24;SNU;Seoul National University/School of Earth and Environmental Sciences;Republic of Korea
+25;UBA-Germany;Umweltbundesamt Offenbach;Germany
+26;IPEN;Instituto de Pesquisas Energeticas e Nucleares;Brazil
+27;AEMET;Izana Atmospheric Research Center, Meteorological State Agency of Spain;Spain
+28;ENEA;National Agency for New Technology, Energy, and Environment;Italy
+29;PNRA/DNA;Nat. Res. Program in Antarctica, Italy, and Nat. Dep. of Antarctica, Argentine;Italy/Argentina
+30;FMI;Finnish Meteorological Institute;Finland
+31;ITM;Department of Applied Environmental Science, Stockholm University;Sweden
+32;CEAM;Fundacion;Spain
+33;CMA;Chinese Academy of Meteorological Sciences;Peoples Republic of China
+34;NCU;National Central University;Taiwan
+35;HMS;Hungarian Meteorological Service;Hungary
+36;SAWS;South African Weather Service;South Africa
+37;SAWS/IFU;South African Weather Service and IFU;South Africa and Germany
+38;UOW;University of Wollongong;Australia
+39;KIT/IMK-IFU;Institute of Meteorology and Climate Research (IMK-IFU), Karlsruhe Institute of Technology (KIT);Germany
+40;WMO/GAW;World Meteorological Organization/Global Atmosphere Watch;Switzerland
+41;GAGE;Global Atmospheric Gases Experiment;Multinational
+42;NIES-MRI;National Institute for Environmental Studies (NIES) and Meteorological Research Institute (MRI);Japan
+43;AGAGE;Advanced Global Atmospheric Gases Experiment;Multinational
+44;RUG;University of Groningen (RUG), Centre for Isotope Research (CIO);Netherlands
+45;MPI-BGC;Max Planck Institute for Biogeochemistry;Germany
+46;IPEE-RAS;IPEE-RAS;Unknown
+47;BU;University of Barcelona;Spain
+48;CU;University of Crete;Greece
+49;KUP;University of Bern, Physics Institute, Climate and Environmental Physics;Switzerland
+50;UE;University of Edinburgh;Scotland
+51;UMM;UMM;Unknown
+52;ECN;Energy Research Centre of the Netherlands;Netherlands
+53;AGH;University of Science and Technology (AGH);Poland
+54;LUND;Lund University;Sweden
+55;MGO;Main Geophysical Observatory;Russia
+56;NILU;Norwegian Institute for Air Research;Norway
+57;RCRSA;Research Center for the Remote Sensing of the Atmosphere;Russia
+58;RHUL;Royal Holloway University London;United Kingdom
+59;HU;Harvard University;United States
+60;PSU;Penn State University;United States
+61;KMA;Korea Meteorological Administration, Korea Global Atmosphere Watch Center;Republic of Korea
+62;AIST;National Institute of Advanced Industrial Science and Technology;Japan
+63;CE;CarboEurope;European Union
+64;LBNL-ARM;Lawrence Berkeley National Laboratory and ARM Climate Research Facility;United States
+65;CIBA;Centro de Investigacion de la Baja Atmosfera;Spain
+66;CONTRAIL;Comprehensive Observation Network for TRace gases by AirLiner;Japan
+67;HIPPO;HIAPER Pole-to-Pole Observations project;United States
+68;OSU;Oregon State University;United States
+69;CARB;California Air Resources Board;United States
+70;KRISS;Korea Research Institute of Standards and Science;Republic of Korea
+97;NOAA-HATS;NOAA ESRL Halocarbons and Other Atmospheric Trace Species;United States
+98;NOAA-model;NOAA ESRL GMD Carbon Cycle;United States
+99;NOAA-aux;NOAA ESRL GMD Carbon Cycle;United States
+101;AMERIFLUX;AmeriFlux Network;United States
+102;UofMN;University of Minnesota;United States
+103;JRC;Joint Research Centre;Italy
+105;WCC-EMPA;World Calibration Centre (EMPA);Switzerland
+106;UNIURB;Universita degli Studi di Urbino - Carlo Bo;Italy
+107;UBA-SCHAU;Umweltbundesamt, Station Schauinsland;Germany
+108;UBA/ZUG;Umweltbundesamt, Zugspitze GAW Station;Germany
+109;NIST;National Institute of Standards and Technology;United States
+110;NIRE;National Institute for Resources and Environment;Japan
+111;WU;Wageningen University;Netherlands
+112;EN;Earth Networks, Inc.;United States
+114;NOAA-CSD;NOAA Chemical Sciences Division;United States
+115;CALTECH;California Institute of Technology, Division of Geological and Planetary Science;United States
+116;BLG;Bowling Lab Group - Terrestrial Biogeochemistry, Department of Biology, University of Utah;United States
+117;NEON;National Ecological Observatory Network;United States
+118;IMAU;Institute for Marine and Atmospheric Research Utrecht;Netherlands
+119;UofWI;University of Wisconsin;United States
+120;SRNL;Savannah River National Laboratory;United States
+121;UofWA;University of Washington;United States
+122;UofVA;University of Virginia;United States
+123;UCLA;University of California Los Angeles;United States
+124;UofIA;University of Iowa;United States
+125;SIMA;Sistema Internacional de Monitoreo Ambiental;Mexico
+126;NOAA-PSD;NOAA ESRL Physical Sciences Division;United States
+127;NOAA-AOML;NOAA Atlantic Ocean Marine Laboratory;United States
+128;UofME;University of Maine;United States
+129;BIOS;Bermuda Institute of Ocean Sciences;United Kingdom
+130;UKMO;United Kingdom Meteorological Office;United Kingdom
+131;INAMET;Instituto Nacional de Meteorologia e Geofisica;Portugal
+132;USNWS;U.S. National Weather Service;United States
+133;DMC;Direccion Meteorologica de Chile;Chile
+134;UOGML;University of Guam/Marine Laboratory;Guam
+135;IMO;Icelandic Meteorological Office;Iceland
+136;BAS;British Antarctic Survey;United Kingdom
+137;NUI-Galway;National University of Ireland - Galway;Ireland
+138;SMN;Servicio Meteorologico Nacional;Argentina
+139;IMH;Mongolian Hydrometeorological Research Institute;Mongolia
+140;WIS;Weizmann Institute of Science;Israel
+141;BMKG;Meteorology, Climatology, and Geophysics Agency;Indonesia
+142;NSF;National Science Foundation;United States
+143;SCMI;Southern California Marine Institute;United States
+144;ONM-Algeria;Office National de la Meteorologie;Algeria
+146;USFWS;U.S. Fish and Wildlife Service;United States
+147;DWD;Deutscher Wetterdienst;Germany
+148;Gobabeb;Gobabeb Training and Research Centre;Namibia
+149;CU;University of Colorado;United States
+150;SBS;Seychelles Bureau of Standards;Republic of Seychelles
+151;KCAER;Korea Centre for Atmospheric Environment Research;Korea
+152;KMS;Kenya Meteological Service;Kenya
+153;USGS;United States Geological Survey;United States
+154;NASA-JPL;Jet Propulsion Laboratory;United States
+155;NOAA-NESDIS;NOAA National Environmental Satellite, Data, and Information Service;United States
+156;GNS;Rafter Radiocarbon Laboratory GNS Science;New Zealand
+157;PICARRO;Picarro, Inc.;United States
+158;AICH;Aichi Air Environment Division;Japan
+159;AWI;Alfred Wegener Institute and Deutscher Wetterdienst;Germany
+160;UNIVBRIS;Atmospheric Chemistry Research Group School of Chemistry University of Bristol;United Kingdom
+161;SAIPF;Center for Environmental Science in Saitama;Japan
+162;ZAMG;Central Institute for Meteorology and Geodynamics;Austria
+163;VIEN;City of Vienna;Austria
+164;BOM;Commonwealth Bureau of Meteorology;Australia
+165;CHMI;Czech Hydrometeorological Institute;Czech Republic
+166;DEFRA;Department for Environment, Food & Rural Affairs;United Kingdom
+167;Argentina;Direcion Nacional del Antartico- Istituto Antartico Argentino;
+168;EMEP;Co-operative Programme for Monitoring and Evaluation of the Long-range Transmission of Air pollutants in Europe;Multinational
+169;EMA;Egyptian Meteorological Authority;Egypt
+170;AQRB;Environment Canada, Meteorological Service of Canada, Air Quality Research Branch;Canada
+171;LVGMC;Environment Geology and Meteorology Centre;Latvia
+172;SMN;Estacion VAG Ushuaia, Servicio Meteorologico Nacional - Gobierno de Tierra del Fuego;Argentina
+173;FMZ;Federal Meteorological Institute of Bosnia and Herzegovina;Bosnia and Herzegovina
+174;RUHYD;Federal Service for Hydrometeorology and Environmental;Russia
+175;FRA;Fisheries Research Agency;Japan
+176;ECOMO;Foundation for Promoting Personal Mobility and Ecological Transportation;Japan
+177;HKO;Hong Kong Observatory;Republic of China
+178;HYDMS;Hydrometeorological Service;Republic of Macedonia
+179;INRNE;Institute for Nuclear Research and Nuclear Energy;Bulgaria
+180;IOEP;Institute of Environmental Protection;Poland
+181;INSMET;Institute of Meteorology;Cuba
+182;IMWM;Institute of Meteorology and Water Management;Poland
+183;IGP;Instituto Geofisico del Peru;Peru
+184;IPMA;Portuguese Institute for the Sea and the Atmosphere;Portugal
+185;ICES;International Center for Earth Sciences - CNR, Institute of Acoustics and Sensor;Italy
+186;IRIMO;Islamic Republic of Iran Meteorological Organization;Islamic Republic of Iran
+187;KSNU;Kyrgyz National University;Kyrgyzstan
+188;LA;Laboratoire d'Aérologie;France
+189;LAMP;Laboratoire de Météorologie Physique;France
+190;MMD;Malaysian Meteorological Department;Malaysia
+191;INMB;Meteorological State Agency of Spain;Spain
+192;NAGOU;Nagoya University;Japan
+193;NIER;National Institute of Environmental Research;Republic of Korea
+194;NIMR;National Institute of Meteorological Research, KMA;Republic of Korea
+195;NIMH;National Institute of Meteorology and Hydrology;Bulgaria
+196;RIVM;National Institute of Public Health and the Environment;Netherlands
+197;NMA;National Meteorological Administration;Romania
+198;ISAC;National Research Council, Institute of Atmospheric Sciences and Climate;Italy
+199;ICIM;National Research and Development Institute for Environmental Protection;Romania
+200;NEDO;New Energy and Industrial Technology Development Organization;Japan
+201;OSAKAU;Osaka University;Japan
+202;RHMS;Republic Hydrometeorological Service of Serbia;Serbia
+203;SHIZU;Shizuoka University;Japan
+204;ARSO;Slovenian Environment Agency;Republic of Slovenia
+205;IVL;Swedish Environmental Research Institute;Sweden
+206;POLYU;The Hong Kong Polytechnic University;Hong Kong, China
+207;UNA;Universidad Nacional de Asuncion, Facultad de Ciencias Exactas y Naturales, Laboratorio de Investigacion Atmosferica y Proble;Paraguay
+208;UFBA;Universidade Federal da Bahia;Brazil
+209;UMLT;University of Malta;Malta
+210;UYRK;University of York;United Kingdom
+211;UBA-Austria;Umweltbundesamt Environment Agency;Austria
+212;ARM;U.S. DOE Climate Research Facility;United States
+213;LBNL;Lawrence Berkeley National Laboratory;United States
+214;CalEnergy;California Energy Commission;United States
+215;USDOE;United States Department of Energy;United States
+216;UofCA;University of California;United States
+217;NSF-PLR;National Science Foundation Office of Polar Programs;United States
+219;JAMCO;JAMCO Corporation;Japan
+220;JAL;Japan Airlines;Japan
+221;JAL_Foundation;JAL Foundation;Japan
+222;MET Norway;Norwegian Meteorological Institute;Norway
+223;FDU;Fairleigh Dickinson University;United States
+224;MIR;Morski Instytut Rybacki;Poland
+225;RMRI;Romanian Marine Research Institute;Romania
+226;LABS;Lulin Atmospheric Background Station;
+227;UCI;W. M. Keck Carbon Cycle Accelerator Mass Spectrometry Laboratory;United States
+228;ICOS;Integrated Carbon Observation System - Flask and Calibration Laboratory;Germany
+229;INFLUX;Indianapolis Flux Experiment;United States
+376;INSTAAR-CURL;INSTAAR Radiocarbon Laboratory;United States
+377;LLNL-CAMS;Center for Accelerator Mass Spectrometry (CAMS);United States
+379;CARVE;Carbon in Arctic Reservoirs Vulnerability Experiment, NASA Earth Ventures;United States
+393;CP;ICOS Carbon Portal;Sweden
+419;INSTAAR-MRS;INSTAAR Mountain Research Station;United States
+421;UHELS;University of Helsinki;Finland
+422;CarboCount-CH;CarboCount-CH;Switzerland
+423;IC3;Institut Catala de Ciencies del Clima, Laboratori de l'Atmosfera i els Oceans;Spain
+424;LUND-CEC;Lund University - Centre for Environmental and Climate Research;Sweden
+425;HPB;Hohenpeissenberg Meteorological Observatory;Germany
+426;SIO_CO2;Scripps Institution of Oceanography CO2 Program;United States
+427;Arava;Arava Institute for Environmental Studies;Israel
+428;NASA-LaRC;AVOCET Group @ NASA LaRC;United States
+429;NASA-Ames;NASA Ames Research Center;United States
+430;NASA-GSFC;NASA Goddard Space Flight Center;United States
+431;ICTA-UAB;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;Spain
+432;U-ATAQ;Utah Atmospheric Trace gas & Air Quality;United States
+433;INPE;National Institute for Space Research;Brazil
+434;PRL;Physical Research Laboratory;India
+435;MPI-MPS;Max-Planck-Institute for Solar System Research (MPS);Germany
+436;MWI;Mount Wilson Institute;United States
+437;ICOS-ML;Integrated Carbon Observation System - ATC Mobile Lab;Finland
+438;MUE;Miyagi University of Education;Japan
+439;UMiami;University of Miami;United States
+440;SLU;Forest Ecology and Management, SLU Umeå;Sweden
+441;CAS;Czechglobe - Global Change Research Institute CAS;Czech Republic
+442;ICOS-ATC;ICOS ATMOSPHERE THEMATIC CENTRE;France
+443;CNR-ISAC;Institute of Atmospheric Sciences and Climate (CNR-ISAC);Italy
+444;HFSJG;High Altitude Research Stations Jungfraujoch and Gornergrat International Foundation;Switzerland
+445;TNO;Netherlands Organisation for Applied Scientific Research;Netherlands
+448;INSTAAR-ARL;INSTAAR Atmospheric Research Laboratory;United States
+451;CEA;Commissariat à l'énergie atomique et aux énergies alternatives;France
+452;ATOMKI;Institute for Nuclear Research;Hungary
+453;ZJUT;ZheJiang University of Technology;China
+454;IAU;Institute for Atmospheric and Environmental Sciences, University of Frankfurt;Germany
+456;CEDA;University of Exeter, Centre for Environmental Data Analysis;United Kingdom
+457;KIT/IMK-ASF;Karlsruhe Institute of Technology (IMK-ASF);Germany
+459;KPRI;Korea Polar Research Institute;Korea
+463;KEA;Kampala Executive Aviation;Uganda
+464;AU;Aarhus University;Denmark
+465;ICOS-ERIC-CP;ICOS Carbon Portal;Sweden
+466;ICOS-RI;ICOS Research Infrastructure;Finland
+468;LATMOS;LATMOS - (IPSL/CNRS/UVSQ/UPMC);France
+469;LANDRA;Agence nationale pour la gestion des déchets radioactifs;France
+470;P2OA;Plateforme Pyrénéenne d’Observation Atmosphérique;France
+471;UEF;University of Eastern Finland;Finland
+472;BIRA;Royal Belgian Institute for Space Aeronomy;Belgium
+473;CRA;Laboratoire d'Aérologie;France
+474;AAR;Aarhus University;Denmark
+475;EMU;Estonian University of Life Sciences Institute of Forestry and Engineering;Estonia
+476;NPL;National Physics Laboratory;United Kingdom
+700;BIPM;Bureau International des Poids et Mésures;France
+701;KMD;Kenya Meteorological Department;Kenya
+702;MeteoSwiss;Federal Office of Meteorology and Climatology MeteoSwiss;Switzerland
+704;NOAA-ARL;NOAA Air Resources Laboratory;United States
+705;UMD;University of Maryland, College Park;United States
+706;NIST-SPO;NIST Greenhouse Gas Measurement Program;United States
+707;MDE;Maryland Department of the Environment;United States
+708;EcoFoG;Joint Research Unit Ecology of Guianan Forests;French Guiana
