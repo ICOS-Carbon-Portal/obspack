@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling >= 1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "icoscp_obspack"
+version = "0.1.0"
+authors = [{name = "Alex Vermeulen", email = "alex.vermeulen@icos-ri.eu"}]
+maintainers = [
+	{name = "Zois Zogopoulos", email = "zois.zogopoulos@nateko.lu.se"},
+]
+license = {file = "LICENSE"}
+readme = "README.md"
+keywords = ["...", "..."]
+classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
+requires-python = ">=3.10"
+dynamic = ["description"]
+dependencies = [
+	"icoscp",
+	"icoscp_core==0.3.7",
+	"matplotlib==3.6.0",
+	"pyyaml==6.0.2",
+	"requests==2.32.3",
+	"scipy==1.15.2",
+	"xarray==2025.3.1",
+]
+
+[project.urls]
+Source = "https://github.com/ICOS-Carbon-Portal/....."
