@@ -1,0 +1,7 @@
+gas: 'n2o'
+output: ''
+analyse: true
+plot: true
+lab_numbers: 'input/lab_numbers.csv'
+icos_stations: 'input/icos_stations.csv'
+debug: true
