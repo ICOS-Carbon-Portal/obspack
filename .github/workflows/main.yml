@@ -13,15 +13,19 @@ permissions:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Specify the Python versions for testing here.
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
       # Step 2: Automatically set Python version from pyproject.toml
-      - name: Set up Python from pyproject.toml
-        uses: python-version-from-pyproject@v1
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
         with:
-          python-version-file: pyproject.toml
+          python-version: ${{ matrix.python-version }}
       # Step 3: Install dependencies using Hatch (since you're using pyproject.toml)
       - name: Install dependencies
         run: |
