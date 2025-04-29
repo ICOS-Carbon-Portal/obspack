@@ -1,0 +1,32 @@
+name: Lint code
+run-name: ${{ github.actor }} is linting ${{ github.repository }} with all supported versions of python 🚀
+
+on:
+  push:
+    branches: [ "trunk" ]
+  pull_request:
+    branches: [ "trunk" ]
+
+permissions:
+  contents: read
+  
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v3
+      # Step 2: Automatically set Python version from pyproject.toml
+      - name: Set up Python from pyproject.toml
+        uses: python-version-from-pyproject@v1
+        with:
+          python-version-file: pyproject.toml
+      # Step 3: Install dependencies using Hatch (since you're using pyproject.toml)
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install hatch
+      # Step 4: Run tests
+      - name: Run tests
+        run: hatch run lint:lint
