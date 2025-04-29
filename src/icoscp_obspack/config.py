@@ -1,7 +1,6 @@
 # Standard library imports.
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 # Related third party imports.
 import pandas as pd
@@ -21,17 +20,17 @@ class YamlConfig:
     nc: str
     png: str
     txt: str
-    lab_numbers: [str | pd.DataFrame]
-    icos_stations: [str | pd.DataFrame]
-    cache: Optional[str] = None
+    lab_numbers: str | pd.DataFrame
+    icos_stations: str | pd.DataFrame
+    cache: str | None
     file_contribs: pd.DataFrame = None
     col_contribs: pd.DataFrame = None
-    mauna_loa: Optional[str] = None
-    ml: Optional[str] = None
-    glb_avg_ch4: Optional[str] = None
+    mauna_loa: str | None = None
+    ml: str | None = None
+    glb_avg_ch4: str | None = None
     do_txt: bool = True
     debug: bool = True
-    debug_info: Optional[str | pd.DataFrame] = 'input/debug/info.csv'
+    debug_info: str | pd.DataFrame = 'input/debug/info.csv'
 
 
 class Config:
@@ -56,11 +55,10 @@ class Config:
             print('-------------')
             self.c.debug_info = pd.read_csv(self.c.debug_info)
         self.init_files()
-        return
 
     @staticmethod
     def read_config() -> YamlConfig:
-        with open(file=y.YAML_CONFIG, mode='r') as yaml_handler:
+        with open(y.YAML_CONFIG) as yaml_handler:
             return YamlConfig(**yaml.safe_load(yaml_handler))
 
     def init_files(self) -> None:
