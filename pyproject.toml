@@ -28,3 +28,42 @@ dependencies = [
 
 [project.urls]
 Source = "https://github.com/ICOS-Carbon-Portal/....."
+
+[tool.hatch.envs.lint]
+detached = true
+dependencies = [
+    "hatch",
+	"ruff>=0.0.263",
+]
+
+[[tool.hatch.envs.test.matrix]]
+python = ["3.10", "3.11", "3.12", "3.13"]
+
+[tool.hatch.envs.lint.scripts]
+lint = [
+	"ruff check {args: src/icoscp_obspack}",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 79
+exclude = ["ccgfilt.py"]
+
+lint.select = [
+  "A",   # flake8-builtins
+  "ARG", # flake8-unused-arguments
+  "B",   # flake8-bugbear
+  "C",   # flake8-comprehensions
+  "E",   # pycodestyle (errors)
+  "F",   # pyflakes
+  "I",   # isort
+  "PL",  # pylint-like
+  "RUF", # Ruff-specific rules
+  "UP",  # pyupgrade
+  "W",   # pycodestyle (warnings)
+]
+
+lint.ignore = [
+  "E501",  # line too long (we already control with line-length)
+  "PLR0913", # too many arguments (can be noisy in scientific code)
+]
