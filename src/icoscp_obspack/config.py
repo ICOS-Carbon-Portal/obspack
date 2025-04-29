@@ -15,14 +15,19 @@ class YamlConfig:
     analyse: bool
     plot: bool
     output: str
+    data: str
+    nc: str
+    png: str
+    txt: str
     lab_numbers: [str | pd.DataFrame]
     icos_stations: [str | pd.DataFrame]
     cache: Optional[str] = None
-    file_contribs: Optional[pd.DataFrame] = None
-    col_contribs: Optional[pd.DataFrame] = None
+    file_contribs: pd.DataFrame = None
+    col_contribs: pd.DataFrame = None
     mauna_loa: Optional[str] = None
     ml: Optional[str] = None
     glb_avg_ch4: Optional[str] = None
+    do_txt: bool = True
     debug: bool = True
     debug_info: Optional[str | pd.DataFrame] = 'input/debug/info.csv'
 
@@ -30,22 +35,24 @@ class YamlConfig:
 class Config:
 
     def __init__(self) -> None:
-        self.config = self.read_config()
-        self.config.output = self.config.output if self.config.output else 'output'
-        self.config.mauna_loa = f'{self.config.output}/mauna_loa.csv'
-        self.config.ml = f'{self.config.output}/ml.csv'
-        self.config.glb_avg_ch4 = f'{self.config.output}/glb_avg_ch4.csv'
-        self.config.lab_numbers = pd.read_csv(self.config.lab_numbers,
-                                              comment='#', delimiter=';')
-        self.config.icos_stations = pd.read_csv(self.config.icos_stations,
-                                                comment='#', delimiter=';')
-        self.config.cache = Path(self.config.output, 'cache')
-        self.file_contribs = pd.DataFrame()
-        self.col_contributors = pd.DataFrame()
-        if self.config.debug:
+        self.c = self.read_config()
+        self.c.output = self.c.output if self.c.output else 'output'
+        self.c.data = self.c.data if self.c.data else Path(self.c.output, 'data')
+        self.c.nc = self.c.nc if self.c.nc else Path(self.c.data, self.c.gas, 'nc-files')
+        self.c.png = self.c.png if self.c.png else Path(self.c.data, self.c.gas, 'png-files')
+        self.c.txt = self.c.txt if self.c.txt else Path(self.c.data, self.c.gas, 'txt-files')
+        self.c.mauna_loa = Path(self.c.output, 'mauna_loa.csv')
+        self.c.ml = Path(self.c.output, 'ml.csv')
+        self.c.glb_avg_ch4 = Path(self.c.output, 'glb_avg_ch4.csv')
+        self.c.lab_numbers = pd.read_csv(self.c.lab_numbers, comment='#', delimiter=';')
+        self.c.icos_stations = pd.read_csv(self.c.icos_stations, comment='#', delimiter=';')
+        self.c.cache = Path(self.c.output, self.c.gas, 'cache')
+        self.c.file_contribs = pd.DataFrame()
+        self.c.col_contribs = pd.DataFrame()
+        if self.c.debug:
             print('DEBUG MODE ON')
             print('-------------')
-            self.config.debug_info = pd.read_csv(self.config.debug_info)
+            self.c.debug_info = pd.read_csv(self.c.debug_info)
         self.init_files()
         return
 
@@ -56,5 +63,7 @@ class Config:
 
     def init_files(self) -> None:
         """Create the needed application directories."""
-        Path(self.config.output).mkdir(parents=True, exist_ok=True)
-        Path(self.config.cache).mkdir(parents=True, exist_ok=True)
+        Path(self.c.output).mkdir(parents=True, exist_ok=True)
+        Path(self.c.data).mkdir(parents=True, exist_ok=True)
+        Path(self.c.cache).mkdir(parents=True, exist_ok=True)
+

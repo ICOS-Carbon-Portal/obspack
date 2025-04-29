@@ -1,14 +1,16 @@
 # Standard library imports.
 from pathlib import Path
+from typing import IO
 import datetime as dt
 import json
+import numpy as np
 import zipfile
-from typing import IO
 
 # Related third party imports.
 from icoscp.dobj import Dobj
 from icoscp_core.icos import meta, ATMO_STATION
 from requests.structures import CaseInsensitiveDict
+import netCDF4
 import pandas as pd
 import requests
 
@@ -21,9 +23,8 @@ from icoscp_obspack.constants import queries as q
 from icoscp_obspack.utils import progress_bar
 
 
-
 # initialisation routine to set up global structures and initialise data
-def init(c: YamlConfig):
+def init():
     global doi
     global atc_drought_header
     global atc_header
@@ -92,8 +93,8 @@ def init(c: YamlConfig):
     fileContribs = pd.DataFrame()
     collectionContribs = pd.DataFrame()
 
-    get_mauna_loa(c)
-    get_glb_avg_ch4(c)
+    get_mauna_loa()
+    get_glb_avg_ch4()
 
 
 
@@ -354,13 +355,885 @@ def uploadMetadataJson(fname=None,objSpec=None,doi=None,scale=None) -> str:
     return jsonPackage
 
 
-def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
-             gas='co2', factor=1e6,
-             calibScale='WMO CO2 X2019', labId=466, ncfolder='./',
-             txtfolder='./', nc_cnt=0, doTxt=False, doicite='PEKQ-M4T1'):
-    # write the measurements data as Obspack netcdf file
-    import netCDF4 as nc
+
+
+
+def ncwrite2txt(ncfile):
     import os
+    import xarray as xr
+
+    data = xr.open_dataset(ncfile)
+    df = data.to_dataframe()
+    pre, ext = os.path.splitext(ncfile)
+    txtfile = pre + '.csv'
+    df = df.to_csv(txtfile)
+
+    return df
+
+def step1(cookie,jsonfile):
+    url = 'https://meta.icos-cp.eu/upload'
+    payload = open(jsonfile)
+    headers = {'content-type': 'application/json', 'Accept-Charset': 'UTF-8'}
+    resp = requests.post(url, data=payload, headers=headers, cookies=cookie)
+    return resp
+
+def read_in_chunks(file_object, chunk_size=65536):
+    while True:
+        data = file_object.read(chunk_size)
+        if not data:
+            break
+        yield data
+
+def step3(cookie, path, file, pid):
+    url = 'https://meta.icos-cp.eu/upload'
+    content_name = str(path+file)
+    content_path = os.path.abspath(path+file)
+    content_size = os.stat(content_path).st_size
+    print(content_name, content_path, content_size)
+    f = open(content_path, 'rb')
+
+    index = 0
+    offset = 0
+    headers = {}
+    params = {'upload-file': file+' '+pid}
+
+    for chunk in read_in_chunks(f):
+        offset = index + len(chunk)
+        headers['Transfer-Encoding'] = 'chunked'
+        headers['Content-Type'] = 'application/octet-stream'
+        headers['Content-length'] = str(content_size)
+        headers['Content-Range'] = 'bytes %s-%s/%s' % (index, offset-1, content_size)
+        index = offset
+        try:
+            file={"file": chunk}
+            r = requests.post(url, files=file, headers=headers, cookies=cookie, params=params)
+            print ("r: %s, Content-Range: %s" % (r, headers['Content-Range']))
+        except Exception as e:
+            print('Exception: ',e,' ',type(e))
+    return r
+
+def step2(file, uri):
+    s=os.popen('curl --cookie ./cookies.txt -H "Transfer-Encoding: chunked" --upload-file '+file+' '+uri)
+    output=s.read().strip()
+    return output
+
+def newfileinfo(uri:str):
+    response = requests.get(uri,headers={"Accept": "application/json"})
+    if response.status_code == 200:
+        data = response.json()
+        return data
+    else:
+        # Print an error message
+        print('Error fetching data')
+        return('Error')
+
+
+# -------------------------****************-----------------------------
+# -------------------------*  REFACTORED  *-----------------------------
+# -------------------------****************-----------------------------
+
+
+def process_obspack() -> pd.DataFrame:
+    meta_info = get_file_meta() if not c.debug else c.debug_info
+    # First scan to determine all stations and files, collect
+    # attribution metadata.
+    # First run to collect citation data on contributors
+    run_all(meta_info=meta_info, process=False)
+    c.col_contribs = cleanup_author_list(contribs=c.col_contribs)
+
+    # Save contributor and author info as json for the DOI minting.
+    auth = Path(c.output, f'authors_{c.gas}.json')
+    contribs = Path(c.output, f'contributors_{c.gas}.json')
+    with open(auth, 'w') as file_handle:
+        file_handle.write(citation(c=c, as_contrib=False))
+    with open(contribs, 'w') as file_handle:
+        file_handle.write(citation(c=c, as_contrib=True))
+    return meta_info
+
+
+def cleanup_author_list(contribs: pd.DataFrame = None) -> pd.DataFrame:
+    # Drop duplicates in the author list.
+    contribs = contribs.sort_values('lname', ascending=False).\
+        drop_duplicates(subset=['fname', 'lname'])
+    contribs.loc[contribs['weight'].isnull(), 'weight'] = 0
+    contribs['wght'] = 100 - contribs.weight.astype(int)
+    contribs = contribs.sort_values(by=['wght', 'lname'], ascending=True)
+    return contribs
+
+
+def get_file_meta() -> pd.DataFrame:
+    info = pd.DataFrame()
+    flist = get_file_list(get_specs())
+    for pos, (_, file) in enumerate(flist.iterrows()):
+        progress_bar(operation='Getting file metadata', current=pos+1, total=len(flist))
+        uri = file['dobj']
+        data = new_file_info(uri)
+        use_file = False
+        for col in data['specificInfo']['columns']:
+            if col['label'] == c.gas:
+                use_file = True
+        if use_file:
+            row = pd.DataFrame([{
+                'uri': uri,
+                'fileName': data['fileName'],
+                'stationId': data['specificInfo']['acquisition']['station']['id'],
+                'hgh': data['specificInfo']['acquisition']['samplingHeight'],
+                'level': data['specification']['dataLevel'],
+                'specification': data['specification']['self']['uri']}])
+            info = pd.concat([info, row], ignore_index=True)
+    return info
+
+
+def new_file_info(uri: str = None):
+    response = requests.get(uri, headers={'Accept': 'application/json'})
+    if response.status_code == 200:
+        data = response.json()
+        return data
+    else:
+        print('Error fetching data')
+        return 'Error'
+
+
+
+def get_specs() -> list[str]:
+    """Return specifications given the gas type."""
+    if c.gas == 'co2':
+        # specs=['atcCo2Product','atcCo2NrtGrowingDataObject']
+        # atcCo2Product repl drought2018AtmoProduct
+        specs = ['atcCo2Product', 'atcCo2L2DataObject',
+                 'atcGHGFastTrackNRTDataObject',
+                 'atcCo2NrtGrowingDataObject']
+        doi = '0HYS-FF7X'
+    elif c.gas == 'ch4':
+        # specs = ['atcCh4Product','atcCh4NrtGrowingDataObject']
+        specs = ['atcCh4Product', 'atcCh4L2DataObject',
+                 'atcGHGFastTrackNRTDataObject', 'atcCh4NrtGrowingDataObject']
+        doi = 'FE8D-2APZ'
+    elif c.gas == 'n2o':
+        # specs = ['atcCh4Product','atcCh4NrtGrowingDataObject']
+        specs = ['atcN2oProduct', 'atcN2oL2DataObject',
+                 'atcGHGFastTrackNRTDataObject', 'atcN2oNrtGrowingDataObject']
+        doi = 'XKKA-AWRS'
+    elif c.gas == 'co':
+        # specs = ['atcCh4Product','atcCh4NrtGrowingDataObject']
+        specs = ['atcCoProduct', 'atcCoL2DataObject',
+                 'atcGHGFastTrackNRTDataObject', 'atcCoNrtGrowingDataObject']
+        doi = '6ZXD-BAAZ'
+    else:
+        raise "Can't handle this gas yet!"
+    return specs
+
+
+def get_file_list(specs: list = None) -> pd.DataFrame:
+    """Query atmospheric data.
+
+    Create and execute a sparql query to retrieve atmospheric data that
+    we need to explore. By default, this function will query data files
+    described by these specifications: 'atcCo2Product',
+    'atcCo2L2DataObject', 'atcCo2NrtGrowingDataObject'.
+    """
+    if specs is None:
+        specs = ['atcCo2Product', 'atcCo2L2DataObject', 'atcCo2NrtGrowingDataObject']
+    anchor = ''
+    for spec in specs:
+        anchor += '<{pref}{spec}>'.format(
+            pref=e.ICOS_CONFIG.meta_resources_prefix, spec=spec)
+    with open(q.FILES_BY_SPEC, mode='r') as q_hdl:
+        query = q_hdl.read().replace('#anchor', anchor)
+    r = requests.get(e.ICOS_CONFIG.sparql,
+                     params={'format': 'json', 'query': query})
+    data = r.json()
+    # Convert the result into a table where each row contains
+    # information about the roles.
+    data_ls = [[data['results']['bindings'][row].get(col, {}).get('value') for col in data['head']['vars']] for row in range(len(data['results']['bindings']))]
+
+    return pd.DataFrame(data_ls, columns=data['head']['vars'])
+
+
+def run_all(meta_info, process=False, doTxt=False):
+
+    global d_files
+    global produced
+
+    prev = None
+    def_citations = [doi_citation('10.18160/0F1E-DKXT'),
+                     doi_citation('10.18160/ATM_NRT_CO2_CH4')]
+
+    # Unique dataset nr in the obspack product.
+    if c.gas == 'co2':
+        nr = 1000
+        fact = 1e6
+        calib = 'WMO CO2 X2019'
+    elif c.gas == 'ch4':
+        nr = 2000
+        fact = 1e9
+        calib = 'WMO X2004A'
+    elif c.gas == 'n2o':
+        nr = 3000
+        fact = 1e9
+        calib = 'NOAA-2006A'
+    elif c.gas == 'co':
+        nr = 4000
+        fact = 1e6
+        calib = 'WMO X2014A'
+    else:
+        exit(f'Unknown or not implemented gas: {c.gas}.\nAborting...')
+
+    stations = meta.list_stations(ATMO_STATION)
+    produced = pd.DataFrame()
+    for st in stations:
+        # Only atmospheric stations
+        station_meta = meta.get_station_meta(st.uri)
+        st_id = st.id
+        if st_id != prev:
+            prev = st_id
+            st_class = station_meta.specificInfo.stationClass
+            data = meta_info[meta_info['stationId'] == st_id]
+
+            # Look up the list of relevant data for these stations,
+            # list of associated sampling heights and determine the
+            # maximum sampling height.
+            maxh = 0
+            heights = []
+            use_data = []
+            for i, do in data.iterrows():
+                if do.hgh is not None:
+                    maxh = max(float(do.hgh), maxh)
+                    if (st_id == 'HUN') and (abs(float(do.hgh) - 48.0) < 1):
+                        heights.append(50)
+                    else:
+                        heights.append(float(do.hgh))
+                else:
+                    maxh = 0
+                    heights.append(0.0)
+            # Deduplicate the list of available sampling heights.
+            hgh = [ii for n, ii in enumerate(heights) if ii not in heights[:n]]
+
+            # now go through the sampling height of each station one by one
+            # if st_id!='CRP':
+            # if st_id=='HFD':
+            # if True:
+            if st_class in ['1', '2']:
+                for h in hgh:
+                    treat_data = []
+                    citations = []
+                    d_files = []
+                    for i, do in data.iterrows():
+                        if do.hgh is not None:
+                            if abs(float(do.hgh) - h) < 2.5:
+                                if (st_id == 'JFJ') and (
+                                        abs(float(do.hgh) - 5.0) < 1):
+                                    maxh = maxh
+                                else:
+                                    s = Dobj(do.uri)
+                                    treat_data.append(do.uri)
+                                    if st_id == 'HFD':
+                                        add_roles(pid='HFD')
+                                    else:
+                                        add_roles(pid=do.uri)
+                                    citations = citations + [s.citation]
+                                    d_files = d_files + [do.uri.replace(
+                                        'https://meta.icos-cp.eu/objects/',
+                                        '')]
+                    if len(treat_data) > 1:
+                        citations = def_citations + citations
+                    # Station class 1 or 2; ICOS stations only.
+                    if len(treat_data) > 0:
+                        print(st_id, ' Height:', h, ' Class:', st_class,
+                              ' NrFiles:', len(treat_data))
+                        if process:
+                            lab_nr = c.icos_stations[
+                                c.icos_stations.Hist == st_id
+                                ].NOAALabNr.values[0]
+                            if len(hgh) > 1:
+                                file_name = (
+                                        c.gas + '_' + st_id.lower() +
+                                        '_tower-insitu_' + str(int(lab_nr)) +
+                                        '_allvalid-' + str(int(h)) + 'magl')
+                            else:
+                                file_name = (
+                                        c.gas + '_' + st_id.lower() +
+                                        '_surface-insitu_' + str(int(lab_nr)) +
+                                        '_allvalid')
+                            df = analyse_station(st_id=st_id, hgh=int(h),
+                                                 dobj_list=treat_data,
+                                                 f_name=f'{c.png}/{file_name}')
+
+                            if not df.empty:
+                                c.file_contribs = cleanup_author_list(c.file_contribs)
+                                person = person_list()
+                                try:
+                                    write_nc(
+                                        file_name, df, station_meta, citations,
+                                        obspack_set, persons=person, hgh=h,
+                                        calib_scale=calib, factor=fact,
+                                        nc_cnt=nr, doi_cite=doi
+                                    )
+                                except:
+                                    print('Error writing: ', file_name)
+
+                                row = pd.DataFrame([{
+                                    'fname': file_name,
+                                    'folder': c.nc,
+                                    'station': st_id,
+                                    'hgh': h,
+                                    'hash': '',
+                                    'Handle': ''
+                                }])
+                                produced = pd.concat([produced, row], ignore_index=True)
+                                nr = nr + 1
+
+
+def add_roles(pid: any = None):
+    # Add contributors for file with this PID to the global contribs dataframes
+    roles, info = get_roles(f_pid=pid)
+    c.col_contribs = pd.concat([roles, c.col_contribs])
+    return roles
+
+
+# look up station uri in dataset meta info and harvest contributor info for that station into a dataframe
+def get_roles(f_pid: any = None):
+    if e.ICOS_CONFIG.station_prefix in f_pid:
+        station_url = f_pid
+    elif len(f_pid) < 7:
+        station_url = e.ICOS_CONFIG.station_prefix + f_pid
+    else:
+        obj = Dobj(f_pid)
+        meta = obj.meta
+        # citation=meta['references']['citationString']
+        station_url = \
+            meta['specificInfo']['acquisition']['station']['org']['self']['uri']
+    if c.debug:
+        print(station_url)
+    df = pd.DataFrame()
+
+    headers = CaseInsensitiveDict()
+    headers["Accept"] = "application/json"
+    resp = requests.get(station_url, headers=headers)
+    info = json.loads(resp.text)
+
+    if 'ATMO_' in station_url:
+        # if debug: print(info)
+        authors = meta['references']['authors']
+        # if debug: print(authors)
+        for author in authors:
+            row = pd.DataFrame([{
+                'fname': author['firstName'],
+                'lname': author['lastName'],
+                'orcid': '',
+                'uri': author['self']['uri'],
+                'weight': 30,
+                'start': None,
+                'end': None
+            }])
+            df = pd.concat([df, row], ignore_inde=True)
+
+    else:
+        for person in info['staff']:
+            fname = person['person']['firstName']
+            lname = person['person']['lastName']
+            # if debug: print(person)
+            uri = person['person']['self']['uri']
+            try:
+                orcid = person['person']['orcid']
+            except:
+                orcid = ''
+            try:
+                wght = person['role']['weight']
+            except:
+                wght = None
+            try:
+                start = person['role']['start']
+            except:
+                start = None
+            try:
+                end = person['role']['end']
+            except:
+                end = None
+            row = pd.DataFrame([{
+                'fname': fname,
+                'lname': lname,
+                'orcid': orcid,
+                'uri': uri,
+                'weight': wght,
+                'start': start,
+                'end': end
+            }])
+            df = pd.concat([df, row], ignore_index=True)
+
+    if 'HFD' in station_url:
+        row = pd.DataFrame([{
+            'fname': 'Chris',
+            'lname': 'Rennick',
+            'orcid': '0000-0003-4993-0156',
+            'uri': 'http://meta.icos-cp.eu/resources/people/chris_rennick',
+            'weight': 100,
+            'start': None,
+            'end': None
+        }])
+        df = df.concat([df, row], ignore_inde=True)
+    if 'ZOT' in station_url:
+        row = pd.DataFrame([{
+            'fname': 'Sönke',
+            'lname': 'Zähle',
+            'orcid': '0000-0001-5602-7956',
+            'uri': 'http://meta.icos-cp.eu/resources/people/S%C3%B6nke_Zaehle',
+            'weight': 100,
+            'start': None,
+            'end': None
+        }])
+        df = df.concat([df, row], ignore_inde=True)
+    if c.debug:
+        print(df)
+
+    return df, info
+
+
+def citation(c: YamlConfig, as_contrib: bool = False) -> str:
+    """Return the formatted citation json."""
+    data_col = 'DataCollector' if as_contrib else ''
+    data_cur = 'DataCurator' if as_contrib else ''
+    data_dist = 'Distributor' if as_contrib else ''
+    data_man = 'DataManager' if as_contrib else ''
+    s = '"contributors": [' if as_contrib else '"creators": ['
+
+    s = s + inst_dcite_json('ICOS RI', data_dist)
+    for i, person in c.col_contribs.iterrows():
+        if person['weight'] > 0:
+            p_json = p_dcite_json(first_name=person['fname'],
+                                  last_name=person['lname'],
+                                  orcid=person['orcid'],
+                                  contrib_type=data_col)
+            s = s + ',' + p_json
+    s = s + ',' + inst_dcite_json('ICOS Carbon Portal', data_cur)
+    s = s + ',' + inst_dcite_json('ICOS Atmosphere Thematic Centre', data_man)
+    s = s + ',' + inst_dcite_json('ICOS Flask And Calibration Laboratory', data_col)
+    if as_contrib:
+        s = s + ',' + inst_dcite_json('ICOS Flask And Calibration Laboratory', data_cur)
+    s = s + ',' + inst_dcite_json('ICOS Central Radiocarbon Laboratory', data_cur)
+    s = s + ' ]\n'
+    return s
+
+
+def inst_dcite_json(name: str = None, contrib_type: str = None) -> str:
+    """Return the formatted institute datacite json."""
+    s = '  {\n  "name" : {\n    "name" : "'+name+'",\n'
+    s = s + '    "nameType" : "Organizational"\n  },\n'
+    s = s + '  "affiliation" : [ ],\n'
+    if contrib_type is not None:
+        s = s + '  "contributorType" : "'+contrib_type+'",\n'
+    s = s + '  "nameIdentifiers" : [ ]\n'
+    s = s + '  }'
+    return s
+
+
+def p_dcite_json(first_name: str = None, last_name: str = None,
+                 orcid: str = None, affiliation: str = None,
+                 contrib_type: str = None) -> str:
+    """Return the formatted person datacite json."""
+    s = ('  {\n  "name" : {\n    "familyName" : "' + last_name + '",\n' +
+         '    "givenName" : "' + first_name + '",\n' +
+         '    "nameType" : "Personal"\n  },\n')
+    if affiliation is not None:
+        s = s + '  "affiliation" : "' + affiliation + '",\n'
+    else:
+        s = s + '  "affiliation" : [ ],\n'
+    if contrib_type is not None:
+        s = s + '  "contributorType" : "' + contrib_type + '",\n'
+    if orcid is not None:
+        s = (s + '  "nameIdentifiers" : [ {\n' + '    "nameIdentifier" : "' +
+             orcid + '",\n    "scheme" : {\n')
+        s = s + '      "nameIdentifierScheme" : "ORCID",\n'
+        s = s + '      "schemeUri" : "http://orcid.org/"\n    } \n  } ]\n '
+    else:
+        s = s + '  "nameIdentifiers" : [ ]\n'
+    s = s + '  }'
+    return s
+
+
+def get_mauna_loa() -> None:
+    # Todo: do we have to read different trends for different gases?
+    # Get the most recent Mauna Loa CO2 data.
+    # Monthly marine BL global averages:
+    # CH4: https://gml.noaa.gov/webdata/ccgg/trends/ch4/ch4_mm_gl.txt
+    # N2O: https://gml.noaa.gov/webdata/ccgg/trends/n2o/n2o_mm_gl.txt
+
+    mauna_loa = pd.read_csv(
+        'https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.txt',
+        skiprows=37, header=None, names=['JulDate', 'Meas'], delimiter=r'\s+',
+        usecols=[3, 4])
+    mauna_loa = mauna_loa.query('Meas>20').copy()
+    mauna_loa['DateTime'] = mauna_loa['JulDate'].apply(t2dt)
+    mauna_loa.set_index('DateTime', inplace=True)
+    mauna_loa.to_csv(c.mauna_loa)
+    ml = ghg_filter_ts(mauna_loa.JulDate, mauna_loa.Meas) if c.analyse \
+        else pd.DataFrame
+    ml.to_csv(c.ml)
+    return
+
+
+def ghg_filter_ts(time, meas, shortTerm=80, longTerm=667, numPolyterms=3,
+                  numHarmonics=4, timeZero=2010, sampleInterval=1/24) \
+        -> pd.DataFrame:
+    """Function wrapper to the CCGCRV routine from Thonen et al. (1996)
+
+    Filters a timeseries by smoothing and removing higher frequency
+    information and fitting a trend and harmonic oscillation.
+    Specifically, designed for greenhouse gas observations.
+    The input parameters are further described in ccgfilt.py, under the
+    ccgFilter class.
+
+    Input
+    Observational data provided in Pandas dataframe with index datetime
+    as YYYY.fraction and the observation series in the first column.
+
+    Result
+    A dataframe with index datetime containing in the columns the
+    GrowthRate, Function, Poly, SmoothCurve, Trend, Cycle, Residual,
+    Detrended the interpolated sampleInterval
+    """
+
+    gap = 0
+    debug = True
+    filt = ccgfilt.ccgFilter(time, meas, shortTerm, longTerm, sampleInterval,
+                             numPolyterms, numHarmonics, timeZero, gap, debug)
+
+    # Get x,y data for plotting
+    x0 = filt.xinterp
+    y1 = filt.getFunctionValue(x0)
+    y2 = filt.getPolyValue(x0)
+    y3 = filt.getSmoothValue(x0)
+    y4 = filt.getTrendValue(x0)
+    y5 = y3 - y4
+
+    # Seasonal Cycle
+    # x and y are original data points
+    trend = filt.getTrendValue(time)
+    detrend = meas - trend
+    harmonics = filt.getHarmonicValue(x0)
+    smooth_cycle = harmonics + filt.smooth - filt.trend
+    # residuals from the function
+    resid_from_func = filt.resid
+    # smoothed residuals
+    resid_smooth = filt.smooth
+    # trend of residuals
+    resid_trend = filt.trend
+    # residuals about the smoothed line
+    resid_from_smooth = filt.yp - filt.getSmoothValue(meas.index)
+    deriv = filt.deriv
+
+    return pd.DataFrame({'GrowthRate': deriv, 'Function': y1, 'Poly': y2,
+                         'SmoothCurve': y3, 'Trend': y4, 'Cycle': smooth_cycle,
+                         'Residual': resid_trend, 'Detrended': y5},
+                        index=pd.Index(x0, name='datetime'))
+
+
+def get_glb_avg_ch4() -> None:
+    # Todo: do we have to read different trends for different gases?
+    mauna_loa_ch4 = pd.read_csv(
+        'https://gml.noaa.gov/webdata/ccgg/trends/ch4/ch4_mm_gl.txt',
+        skiprows=65, header=None, names=['JulDate', 'Meas'], delimiter=r'\s+',
+        usecols=[2, 3]
+    )
+    mauna_loa_ch4 = mauna_loa_ch4.query('Meas>20').copy()
+    mauna_loa_ch4['DateTime'] = mauna_loa_ch4['JulDate'].apply(t2dt)
+    mauna_loa_ch4.set_index('DateTime', inplace=True)
+    mauna_loa_ch4.to_csv(c.glb_avg_ch4)
+    return
+
+
+def t2dt(atime: float) -> dt.datetime:
+    """Converts a fractional year timestamp to a datetime object."""
+    year = int(atime)
+    remainder = atime - year
+    boy = dt.datetime(year, 1, 1)
+    eoy = dt.datetime(year + 1, 1, 1)
+    seconds = remainder * (eoy - boy).total_seconds()
+    return boy + dt.timedelta(seconds=seconds)
+
+
+def doi_citation(doi_id: str = None, citation_style: str = 'elsevier-harvard') \
+        -> str:
+    headers = CaseInsensitiveDict()
+    headers['Accept'] = 'text/x-bibliography; style=' + citation_style
+    resp = requests.get('https://doi.org/'+doi_id, headers=headers)
+    return resp.text if resp.status_code == 200 else 'citation not found'
+
+
+def analyse_station(st_id: str = None, hgh: int = None, dobj_list: list = None,
+                    f_name: str = None):
+    """Run ccgfilt for Mauna Loa and the chosen station."""
+    f_name = f_name + '.png' if c.plot else ''
+    icos_df = get_icos_ts(dobj_list=dobj_list, hgh=hgh, download=True)
+    if icos_df.empty:
+        print('No data found for station ' + st_id + ' ' + str(hgh))
+    else:
+        if c.plot:
+            try:
+                df = ghg_filter_ts(icos_df.JulDate, icos_df.Meas)
+                mau = c.mauna_loa if c.gas == 'co2' else glob_average()
+                if c.gas == 'co2':
+                    gas_name = 'CO${_2}$'
+                    unit = '[µmol/mol]'
+                    limy = [380, 460]
+                    back = c.ml
+                    mau = c.mauna_loa
+                elif c.gas == 'ch4':
+                    gas_name = 'CH${_4}$'
+                    unit = '[nmol/mol]'
+                    limy = [1800, 2500]
+                    back = pd.DataFrame()
+                elif c.gas == 'n2o':
+                    gas_name = 'N${_2}$O'
+                    unit = '[nmol/mol]'
+                    limy = [315, 370]
+                    back = pd.DataFrame()
+
+                nicePlot(df,back,icos_df,mau,MeasName=gas_name,Unit=unit,Station=st_id+' '+str(hgh),
+                         pngfile=file,xlim=[2010,2025.1],ylim=limy)
+            except:
+                print('Error in time filtering for station ',st_id,'; plot skipped')
+    return icos_df
+
+
+def get_icos_ts(dobj_list: list = None, hgh: int = None,
+                download: bool = False):
+
+    time_start_l2 = dt.datetime.now()
+    time_end_l2 = dt.datetime.now()
+
+    data_df_ls = []
+    data_lx_df = pd.DataFrame()
+
+    for rdo in dobj_list:
+        do = Dobj(rdo)
+        fast = False
+        spec = do.meta['specification']['self']['uri']
+        level = int(do.meta['specification']['dataLevel'])
+        if level == 2:
+            if 'L2DataObject' in spec:
+                # Get date & time for 1st & last observation:
+                time_start_l2 = dt.datetime.strptime(
+                    do.meta['specificInfo']['acquisition']['interval'][
+                        'start'], '%Y-%m-%dT%H:%M:%SZ')
+                time_end_l2 = dt.datetime.strptime(
+                    do.meta['specificInfo']['acquisition']['interval']['stop'],
+                    '%Y-%m-%dT%H:%M:%SZ')
+                level = 3
+            else:
+                level = 0
+        else:
+            if level == 1:
+                if 'FastTrack' in spec:
+                    time_end_fast = dt.datetime.strptime(
+                        do.meta['specificInfo']['acquisition']['interval'][
+                            'stop'], '%Y-%m-%dT%H:%M:%SZ')
+                    level = 2
+
+    for rdo in dobj_list:
+        do = Dobj(rdo)
+        spec = do.meta['specification']['self']['uri']
+        level = do.meta['specification']['dataLevel']
+        project = do.meta['specification']['project']['self']['label']
+        print(spec)
+        if level == 2:
+            if 'L2DataObject' in spec:
+                level = 3
+            else:
+                level = 0
+        if level == 1:
+            if 'FastTrack' in spec:
+                fast = True
+                level = 2
+
+        # Get pandas dataframe
+        if download:
+            obs_data_df = get_icos_atm_product(dobj=do, level=level)
+        else:
+            obs_data_df = do.getColumns()
+            obs_data_df['Datetime'] = pd.to_datetime(obs_data_df['TIMESTAMP'])
+            obs_data_df = obs_data_df.set_index('Datetime')
+
+        # Check if dobj corresponds to NRT data product:
+        if level == 1:
+            # Filter dataframe by quality flag value:
+            if fast:
+                obs_data_df = obs_data_df[time_end_l2:]
+            else:
+                obs_data_df = obs_data_df[time_end_fast:]
+            if useflags:
+                obs_data_df = obs_data_df.loc[obs_data_df.Flag == 'U']
+        else:
+            if level == 0:
+                # Filter dataframe by quality flag value and only values before L2 data start:
+                time_start_l0 = dt.datetime.strptime(
+                    do.meta['specificInfo']['acquisition']['interval'][
+                        'start'], '%Y-%m-%dT%H:%M:%SZ')
+                time_end_l2 = dt.datetime.strptime(
+                    do.meta['specificInfo']['acquisition']['interval']['stop'],
+                    '%Y-%m-%dT%H:%M:%SZ')
+                obs_data_df = obs_data_df.query('Datetime < @time_start_l2')
+            if useflags:
+                obs_data_df = obs_data_df[obs_data_df['Flag'].isin(['O', 'U'])]
+
+            # Add data dataframe of the current data object ID to the list:
+        if level == 3:
+            obs_data_df['Level'] = 2
+        elif level == 2:
+            obs_data_df['Level'] = 15
+        elif level == 1:
+            obs_data_df['Level'] = 1
+
+        if (level == 0) & (len(obs_data_df) > 1):
+            obs_data_df['Level'] = 0
+            obs_data_df.loc[(obs_data_df.index >= time_start_l2) & (
+                        obs_data_df.index <= time_end_l2), 'Level'] = 2
+
+        data_df_ls.append(obs_data_df)
+        contrib, info = get_roles(f_pid=do.id)
+        c.file_contribs = pd.concat([contrib, c.file_contribs])
+
+    # Concatenate list of dataframes to one dataframe:
+    data_lx_df = pd.concat(data_df_ls)
+
+    # Sort the dataframe index in ascending order:
+    data_lx_df.sort_index(inplace=True)
+
+    # Change column name from "co2" to "Meas":
+    data_lx_df.rename({'co2': 'Meas'}, axis='columns', inplace=True)
+
+    # if needed add column with Julian Year:
+    if 'JulDate' not in data_lx_df:
+        data_lx_df['JulDate'] = [toYearFraction(i) for i in data_lx_df.index]
+
+    # if present drop column TIMESTAMP:
+    if 'TIMESTAMP' in data_lx_df:
+        data_lx_df.drop('TIMESTAMP', axis=1, inplace=True)
+
+    # Return dataframe:
+    return data_lx_df
+
+
+def glob_average() -> pd.DataFrame:
+    skip_rows = 40 if c.gas == 'co2' else 48
+    url = f'https://gml.noaa.gov/webdata/ccgg/trends/{c.gas}/{c.gas}_mm_gl.txt'
+    global_aver = pd.read_csv(url, skiprows=skip_rows, header=None,
+                              names=['JulDate', 'Meas'], delimiter=r"\s+",
+                              usecols=[2, 3])
+    global_aver = global_aver.query('Meas>20')
+    global_aver['DateTime'] = [t2dt(i) for i in global_aver.JulDate]
+    global_aver.set_index('DateTime', inplace=True)
+    return global_aver
+
+
+def get_icos_atm_product(dobj: Dobj = None, level: int = None):
+    """
+    Get ICOS atmospheric data.
+
+    Download ICOS ATM data by directly accessing the data objects from
+    the Carbon Portal; this will trigger the download count for each
+    object, unless we are on the blocklist.
+    """
+    def count(s, ch):
+        """Count occurrences of a character in a string."""
+        cnt = 0
+        for i in s:
+            if i == ch:
+                cnt += 1
+        return cnt
+
+    def readfile(source: Path | IO[bytes] = None) -> pd.DataFrame:
+        # Read the ICOS data object by using the io-stream handle and parse as csv
+        # using the predefined column definitions and length of header.
+        # Reading this column definitions from the io-stream directly needs seek to work and that fails,
+        # so this part is commented out
+        #        for i in range(0,45):
+        #            header = f.readline()
+        #            print(header)
+        #        head=str(header)[3:-3]
+        #        colnames="['"+head.replace(';',"','")+"']"
+        #        nrcols=count(colnames,',')+1
+        #        print(nrcols)
+        #        print('Columns: ', colnames)
+        #        f.seek(0)
+        #        df = pd.read_csv(f,skiprows=skip[level],header=None,names=colnames[level],delimiter=';',usecols=range(0,nrcols[level]-1))
+        if c.debug:
+            print('File name: ', fname)
+            print('Level: ', level)
+            print('Columns: ', colnames[level])
+            print('Cols : ', nrcols[level])
+        ret_df = pd.read_csv(source, comment='#', header=None,
+                             names=colnames[level], delimiter=';',
+                             usecols=range(0, nrcols[level] - 1))
+        return ret_df
+
+    # modify the url to allow download by accepting the data license explicitly
+    url = dobj.meta['accessUrl'].replace('https://data.icos-cp.eu/objects/',
+                                         'https://data.icos-cp.eu/licence_accept?ids=%5B%22') + '%22%5D'
+    print('url:', url)
+
+    # Get the data object from CP, unless we have the file in cache
+    # already, if not, save it there.
+    fname = Path(c.output, './cache/', dobj.meta['fileName'])
+    # fname = './cache/' + dobj.meta['fileName']
+    if not fname.exists():
+        r = requests.get(url, allow_redirects=True)
+        with open(fname, 'wb') as f:
+            f.write(r.content)
+        print('filled cache with ', fname)
+    else:
+        print('hit cache for ', fname)
+    if fname.suffix == '.zip':
+        zf = zipfile.ZipFile(fname, 'r')
+        for item in zf.namelist():
+            if c.debug:
+                print("File in zip: " + item)
+        match = [s for s in zf.namelist() if 'ICOS_ATC' in s][0]
+        df = readfile(source=zf.open(match))
+    else:
+        df = readfile(source=fname)
+
+    #    # access the url and open an io stream to it, if the file is zipped, unzip the stream, and pass the file to a dataframe
+    #    r = requests.get(url, allow_redirects=True)
+    #    if r.headers.get('content-type')=='application/zip':
+    #        filename = r.content
+    #        zf = zipfile.ZipFile(io.BytesIO(filename), 'r')
+    #        for item in zf.namelist():
+    #            if debug: print("File in zip: "+ item)
+    #        match = [s for s in zf.namelist() if "ICOS_ATC" in s][0]
+    #        df=readfile(zf.open(match))
+    #    else:
+    #        s=r.content
+    #        df=readfile(io.StringIO(s.decode('utf-8')))
+
+    # do some bookkeeping, like removing useless time columns, using a true datetime and indexing
+    df.rename({'DecimalDate': 'JulDate'}, axis='columns', inplace=True)
+    df['Datetime'] = [t2dt(i) for i in df['JulDate']]
+    df = df.set_index('Datetime')
+    df.drop(['Year', 'Month', 'Day', 'Hour', 'Minute'], axis=1, inplace=True)
+
+    # if debug set printing of url and dataframe
+    if c.debug:
+        print(url, ' ', df)
+
+    return df
+
+
+def person_list():
+    name_list = ''
+    first = True
+    for i, p in c.col_contribs.iterrows():
+        if not first:
+            name_list = name_list + ' AND '
+        first = False
+        name_list = name_list + p.fname + ' ' + p.lname
+    return name_list
+
+
+def write_nc(f_name, df, station, citations, settings, persons='', hgh=150,
+             factor=1e6, calib_scale='WMO CO2 X2019', lab_id=466, nc_cnt=0,
+             doi_cite='PEKQ-M4T1'):
+    """Write measurements' data as ObsPack NetCDF file."""
 
     global cntAll
 
@@ -368,18 +1241,18 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
     # df = df[:99]
 
     dlen = len(df.index)
-    netcdfname = ncfolder + fname + '.nc'
-    ds = nc.Dataset(netcdfname, 'w', format='NETCDF4', clobber=True)
+    nc_name = f'{c.nc}/{f_name}.nc'
+    ds = netCDF4.Dataset(nc_name, 'w', format='NETCDF4', clobber=True)
     #    try:
     # create dimensions
     time = ds.createDimension('time', dlen)
-    s20 = ds.createDimension('string_of_20chars', 20);
-    cal_6 = ds.createDimension('calendar_components', 6);
-    s10 = ds.createDimension('string_of_10chars', 10);
-    s200 = ds.createDimension('string_of_200chars', 200);
-    dim6 = ds.createDimension('dim_concerns', 6);
-    mip17 = ds.createDimension('mip_nmodels', 17);
-    ch40 = ds.createDimension('nchar', 40);
+    s20 = ds.createDimension('string_of_20chars', 20)
+    cal_6 = ds.createDimension('calendar_components', 6)
+    s10 = ds.createDimension('string_of_10chars', 10)
+    s200 = ds.createDimension('string_of_200chars', 200)
+    dim6 = ds.createDimension('dim_concerns', 6)
+    mip17 = ds.createDimension('mip_nmodels', 17)
+    ch40 = ds.createDimension('nchar', 40)
 
     # add variables
     time = ds.createVariable('time', 'i4', ('time',), zlib=True)
@@ -433,10 +1306,10 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
     value = ds.createVariable('value', 'f4', ('time',), fill_value=np.nan,
                               zlib=True)
     value.long_name = 'measured_mole_fraction_of_trace_gas_in_dry_air'
-    value.standard_name = 'mole_fraction_of_' + gas + '_in_dry_air'
+    value.standard_name = 'mole_fraction_of_' + c.gas + '_in_dry_air'
     value.units = 'mol mol-1'
     value.comment = 'mole per mole of dry air'
-    value.scale_comment = calibScale
+    value.scale_comment = calib_scale
 
     nvalue = ds.createVariable('nvalue', 'i', ('time',), fill_value=-9,
                                zlib=True)
@@ -562,12 +1435,12 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
 
     # fill the attributes, most value are default and copied from Obspack V7 2021 and some need to be replaced
     # with actual info before writing to netcdf
-    obspack_name = 'obspack_' + gas + '_' + str(
-        labId) + '_GV_ICOSFT2025.1_' + dt.datetime.now().strftime('%Y%m%d')
+    obspack_name = 'obspack_' + c.gas + '_' + str(
+        lab_id) + '_GV_ICOSFT2025.1_' + dt.datetime.now().strftime('%Y%m%d')
 
     s = c.icos_stations[c.icos_stations.Hist == station.id]
-    labId = s.NOAALabNr.values[0]
-    labName = s.NOAA_Lab_name.values[0]
+    lab_id = s.NOAALabNr.values[0]
+    lab_name = s.NOAA_Lab_name.values[0]
     TZ = s.Timezone.values[0]
     if s.ICOS_L12.values[0] == '':
         isICOS = 'No'
@@ -651,13 +1524,13 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
     obs_num[:] = np.arange(1, len(df) + 1, 1)
     obspack_num[:] = np.arange(cntAll + 1, cntAll + len(df) + 1, 1)
     ss = np.array(
-        [obspack_name + '~' + fname + '~' + str(cntAll + i + 1) for i in
+        [obspack_name + '~' + f_name + '~' + str(cntAll + i + 1) for i in
          range(len(df))], dtype='S200')
-    obspack_id[:] = nc.stringtochar(ss)
+    obspack_id[:] = netCDF4.stringtochar(ss)
 
     assimilation_concerns[:, :] = 0
 
-    if gas == 'co2':
+    if c.gas == 'co2':
         warning = 'In Feb 2021, NOAA updated the WMO CO2 scale from version X2007 to X2019 ' \
                   '(Hall et al., 2021). The X2019 scale supersedes all previous versions of the WMO scale and is ' \
                   'used in this GV+ release. Values contributed on scales other than X2019 have been adjusted by ' \
@@ -686,8 +1559,8 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
             'warning_dataset_scale': warning,
             'dataset_creation_date': dt.datetime.now().isoformat(),
             'dataset_num': nc_cnt,
-            'dataset_name': fname,
-            'dataset_globalview_prefix': station.id + '_' + str(labId) + 'C0',
+            'dataset_name': f_name,
+            'dataset_globalview_prefix': station.id + '_' + str(lab_id) + 'C0',
             'dataset_process': "PassThru",
             'dataset_alternative_names': 'NA',
             'dataset_alternative_names_description': 'The attribute dataset_alternative_names is used to identify ' \
@@ -695,7 +1568,7 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
                                                      'record for this dataset please use all alternatively named datasets that appear in this ObsPack ' \
                                                      'product and the corresponding release of other ObsPacks if applicable.',
             'dataset_alternative_names_comment': '',
-            'dataset_parameter': gas,
+            'dataset_parameter': c.gas,
             'dataset_project': 'surface-insitu or tower-insitu',
             'dataset_platform': 'fixed',
             'dataset_map': 'https://meta.icos-cp.eu/station/?station=/resources/stations/AS_' + station.id + '&icon=https://static.icos-cp.eu/share/stations/icons/as.png',
@@ -706,7 +1579,7 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
                                'provided by the ICOS program. The valid data selection scheme for ICOS datasets may differ ' \
                                'significantly from the selection scheme provided previously by contributing laboratories.)',
             'dataset_contains_ICOS_L1_and_or_L2_data': isICOS,
-            'dataset_calibration_scale': calibScale,
+            'dataset_calibration_scale': calib_scale,
             'dataset_start_date': timeseries_start,
             'dataset_stop_date': timeseries_end,
             'dataset_data_frequency': 1.,
@@ -720,8 +1593,8 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
                                    'evaluation, and satellite validation studies.  Please report errors and send comments regarding ' \
                                    'this product to the ObsPack originators. Please read carefully the ObsPack Fair Use statement ' \
                                    'and cite appropriately. DOI metadata for this product are available ' \
-                                   'at https://search.datacite.org/works/10.18160/' + doicite + '.',
-            'dataset_usage_url': 'https://doi.org/10.18160/' + doicite,
+                                   'at https://search.datacite.org/works/10.18160/' + doi_cite + '.',
+            'dataset_usage_url': 'https://doi.org/10.18160/' + doi_cite,
             'dataset_usage_description': 'In addition to this product\'s citation we ask that you please cite ' \
                                          'the following provider citations when using data from this dataset.',
             'dataset_provider_citation_total': str(len(citations))}
@@ -735,7 +1608,7 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
                                     'described at https://data.icos-cp.eu/licence.',
         'dataset_provider_license_url': 'http://creativecommons.org/licenses/by/4.0/',
         'dataset_reference_total_listed': 0,
-        'dataset_contribution': 'These data are provided by ICOS-RI AND ' + labName + ' AND ICOS ATC, CAL, Carbon Portal. ' \
+        'dataset_contribution': 'These data are provided by ICOS-RI AND ' + lab_name + ' AND ICOS ATC, CAL, Carbon Portal. ' \
                                                                                       'Principal investigators and contributors include ' + persons + '.',
         'obspack_variables_and_attributes': 'ObsPack variables and attributes are described at ' \
                                             'www.gml.noaa.gov/ccgg/obspack/documentation.html#MetaData',
@@ -745,7 +1618,7 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
                                'evaluation, and satellite validation studies.  Please report errors and send comments regarding this ' \
                                'product to the ObsPack originators. Please read carefully the ObsPack Fair Use statement and cite ' \
                                'appropriately. DOI metadata for this product are available at ' \
-                               'https://search.datacite.org/works/10.18160/' + doicite + \
+                               'https://search.datacite.org/works/10.18160/' + doi_cite + \
                                'Please visit http://www.gml.noaa.gov/ccgg/obspack/ for more information.',
         'obspack_creation_date': dt.datetime.now().isoformat(),
         'obspack_warning': 'Every effort is made to create the most accurate and precise data product possible.' \
@@ -770,7 +1643,7 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
         'obspack_usage_policy': 'https://www.icos-cp.eu/data-services/about-data-portal/data-license',
         'obspack_data_license': 'https://creativecommons.org/licenses/by/4.0/',
         'obspack_identifier_link': settings['doi_collection'],
-        'obspack_citation': doi_citation('https://doi.org/10.18160/' + doicite),
+        'obspack_citation': doi_citation('https://doi.org/10.18160/' + doi_cite),
         'Conventions': 'CF-1.7',
         'nc.institution': 'Unidata',
         'source': 'ICOS RI',
@@ -781,14 +1654,14 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
     ds.setncatts(attr)
 
     #    except:
-    #        print('Error in writing netcdf ',fname)
+    #        print('Error in writing netcdf ',f_name)
     #        ds.close()
     #        raise
     #    finally:
     ds.sync()
     ds.close()
 
-    print('Done writing ', netcdfname)
+    print('Done writing ', nc_name)
 
     if doTxt:
         csvf = pd.DataFrame()
@@ -821,14 +1694,14 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
         csvf['unique_sample_location_num'] = np.arange(1, len(df) + 1, 1)
         csvf['obspack_num'] = np.arange(cntAll + 1, cntAll + len(df) + 1, 1)
         csvf['obspack_id'] = [
-            obspack_name + '~' + fname + '~' + str(cntAll + i + 1) for i in
+            obspack_name + '~' + f_name + '~' + str(cntAll + i + 1) for i in
             range(len(df))]
 
-        csvname = txtfolder + fname + '.txt'
+        csvname = txtfolder + f_name + '.txt'
         csvf.to_csv(csvname, sep=' ', na_rep='-999999', header=True,
                     index=False, float_format='%.5f')
-        header = createtxtheader('header.txt', obspack_name, netcdfname,
-                                 doicite)
+        header = createtxtheader('header.txt', obspack_name, nc_name,
+                                 doi_cite)
 
         with open(csvname, "r") as inf:
             csv = inf.readlines()
@@ -839,901 +1712,21 @@ def write2nc(fname, df, station, citations, settings, persons='', hgh=150,
 
     cntAll = cntAll + len(df)
 
-    # export json metadata package for upload to CP
-    import json
-
     specURL = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackTimeSerieResult'
-    if gas == 'ch4':
+    if c.gas == 'ch4':
         specURL = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackCH4TimeSeriesResult'
-    if gas == 'n2o':
+    if c.gas == 'n2o':
         specURL = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackN2oTimeSeriesResult'
 
-    res = uploadMetadataJson(netcdfname,
+    res = uploadMetadataJson(nc_name,
                              specURL,
-                             '10.18160/' + doicite,
-                             calibScale)
+                             '10.18160/' + doi_cite,
+                             calib_scale)
     pretty = json.dumps(res, indent=2)
-    jsonfname = netcdfname.replace('.nc', '.json')
+    jsonfname = nc_name.replace('.nc', '.json')
     with open(jsonfname, 'w') as f:
         f.write(pretty)
     print('Done saving ', jsonfname)
-
-
-def ncwrite2txt(ncfile):
-    import os
-    import xarray as xr
-
-    data = xr.open_dataset(ncfile)
-    df = data.to_dataframe()
-    pre, ext = os.path.splitext(ncfile)
-    txtfile = pre + '.csv'
-    df = df.to_csv(txtfile)
-
-    return df
-
-
-
-
-def personlist(collectionContrib):
-    namelist=''
-    first=True
-    for i,p in collectionContrib.iterrows():
-        if first!=True:
-            namelist=namelist+' AND '
-        first=False
-        namelist=namelist+p.fname+' '+p.lname
-    return namelist
-
-
-def step1(cookie,jsonfile):
-    url = 'https://meta.icos-cp.eu/upload'
-    payload = open(jsonfile)
-    headers = {'content-type': 'application/json', 'Accept-Charset': 'UTF-8'}
-    resp = requests.post(url, data=payload, headers=headers, cookies=cookie)
-    return resp
-
-def read_in_chunks(file_object, chunk_size=65536):
-    while True:
-        data = file_object.read(chunk_size)
-        if not data:
-            break
-        yield data
-
-def step3(cookie, path, file, pid):
-    url = 'https://meta.icos-cp.eu/upload'
-    content_name = str(path+file)
-    content_path = os.path.abspath(path+file)
-    content_size = os.stat(content_path).st_size
-    print(content_name, content_path, content_size)
-    f = open(content_path, 'rb')
-
-    index = 0
-    offset = 0
-    headers = {}
-    params = {'upload-file': file+' '+pid}
-
-    for chunk in read_in_chunks(f):
-        offset = index + len(chunk)
-        headers['Transfer-Encoding'] = 'chunked'
-        headers['Content-Type'] = 'application/octet-stream'
-        headers['Content-length'] = str(content_size)
-        headers['Content-Range'] = 'bytes %s-%s/%s' % (index, offset-1, content_size)
-        index = offset
-        try:
-            file={"file": chunk}
-            r = requests.post(url, files=file, headers=headers, cookies=cookie, params=params)
-            print ("r: %s, Content-Range: %s" % (r, headers['Content-Range']))
-        except Exception as e:
-            print('Exception: ',e,' ',type(e))
-    return r
-
-def step2(file, uri):
-    s=os.popen('curl --cookie ./cookies.txt -H "Transfer-Encoding: chunked" --upload-file '+file+' '+uri)
-    output=s.read().strip()
-    return output
-
-def newfileinfo(uri:str):
-    response = requests.get(uri,headers={"Accept": "application/json"})
-    if response.status_code == 200:
-        data = response.json()
-        return data
-    else:
-        # Print an error message
-        print('Error fetching data')
-        return('Error')
-
-
-# -------------------------****************-----------------------------
-# -------------------------*  REFACTORED  *-----------------------------
-# -------------------------****************-----------------------------
-
-
-def process_obspack(c: YamlConfig = None) -> pd.DataFrame:
-    meta_info = get_file_meta(c=c) if not c.debug else c.debug_info
-    # First scan to determine all stations and files, collect
-    # attribution metadata.
-    # First run to collect citation data on contributors
-    run_all(meta_info=meta_info, c=c, process=False)
-    c = cleanup_author_list(c=c)
-
-    # Save contributor and author info as json for the DOI minting.
-    auth = Path(c.output, f'authors_{c.gas}.json')
-    contribs = Path(c.output, f'contributors_{c.gas}.json')
-    with open(auth, 'w') as file_handle:
-        file_handle.write(citation(c=c, as_contrib=False))
-    with open(contribs, 'w') as file_handle:
-        file_handle.write(citation(c=c, as_contrib=True))
-    return meta_info
-
-
-def cleanup_author_list(c: YamlConfig = None) -> YamlConfig:
-    # drop duplicates in the author list
-    contribs = c.col_contribs.copy()
-    contribs = contribs.sort_values('lname', ascending=False).\
-        drop_duplicates(subset=['fname', 'lname'])
-    contribs.loc[contribs['weight'].isnull(), 'weight'] = 0
-    contribs['wght'] = 100 - contribs.weight.astype(int)
-    contribs = contribs.sort_values(by=['wght', 'lname'], ascending=True)
-    c.col_contribs = contribs.copy()
-    return c
-
-
-def get_file_meta(c: YamlConfig = None) -> pd.DataFrame:
-    info = pd.DataFrame()
-    flist = get_file_list(get_specs(c=c))
-    for pos, (_, file) in enumerate(flist.iterrows()):
-        progress_bar(operation='Getting file metadata', current=pos+1, total=len(flist))
-        uri = file['dobj']
-        data = new_file_info(uri)
-        use_file = False
-        for col in data['specificInfo']['columns']:
-            if col['label'] == c.gas:
-                use_file = True
-        if use_file:
-            row = pd.DataFrame([{
-                'uri': uri,
-                'fileName': data['fileName'],
-                'stationId': data['specificInfo']['acquisition']['station']['id'],
-                'hgh': data['specificInfo']['acquisition']['samplingHeight'],
-                'level': data['specification']['dataLevel'],
-                'specification': data['specification']['self']['uri']}])
-            info = pd.concat([info, row], ignore_index=True)
-    return info
-
-
-def new_file_info(uri: str = None):
-    response = requests.get(uri, headers={'Accept': 'application/json'})
-    if response.status_code == 200:
-        data = response.json()
-        return data
-    else:
-        print('Error fetching data')
-        return 'Error'
-
-
-
-def get_specs(c: YamlConfig = None) -> list[str]:
-    """Return specifications given the gas type."""
-    if c.gas == 'co2':
-        # specs=['atcCo2Product','atcCo2NrtGrowingDataObject']
-        # atcCo2Product repl drought2018AtmoProduct
-        specs = ['atcCo2Product', 'atcCo2L2DataObject',
-                 'atcGHGFastTrackNRTDataObject',
-                 'atcCo2NrtGrowingDataObject']
-        doi = '0HYS-FF7X'
-    elif c.gas == 'ch4':
-        # specs = ['atcCh4Product','atcCh4NrtGrowingDataObject']
-        specs = ['atcCh4Product', 'atcCh4L2DataObject',
-                 'atcGHGFastTrackNRTDataObject', 'atcCh4NrtGrowingDataObject']
-        doi = 'FE8D-2APZ'
-    elif c.gas == 'n2o':
-        # specs = ['atcCh4Product','atcCh4NrtGrowingDataObject']
-        specs = ['atcN2oProduct', 'atcN2oL2DataObject',
-                 'atcGHGFastTrackNRTDataObject', 'atcN2oNrtGrowingDataObject']
-        doi = 'XKKA-AWRS'
-    elif c.gas == 'co':
-        # specs = ['atcCh4Product','atcCh4NrtGrowingDataObject']
-        specs = ['atcCoProduct', 'atcCoL2DataObject',
-                 'atcGHGFastTrackNRTDataObject', 'atcCoNrtGrowingDataObject']
-        doi = '6ZXD-BAAZ'
-    else:
-        raise "Can't handle this gas yet!"
-    return specs
-
-
-def get_file_list(specs: list = None) -> pd.DataFrame:
-    """Query atmospheric data.
-
-    Create and execute a sparql query to retrieve atmospheric data that
-    we need to explore. By default, this function will query data files
-    described by these specifications: 'atcCo2Product',
-    'atcCo2L2DataObject', 'atcCo2NrtGrowingDataObject'.
-    """
-    if specs is None:
-        specs = ['atcCo2Product', 'atcCo2L2DataObject', 'atcCo2NrtGrowingDataObject']
-    anchor = ''
-    for spec in specs:
-        anchor += '<{pref}{spec}>'.format(
-            pref=e.ICOS_CONFIG.meta_resources_prefix, spec=spec)
-    with open(q.FILES_BY_SPEC, mode='r') as q_hdl:
-        query = q_hdl.read().replace('#anchor', anchor)
-    r = requests.get(e.ICOS_CONFIG.sparql,
-                     params={'format': 'json', 'query': query})
-    data = r.json()
-    # Convert the result into a table where each row contains
-    # information about the roles.
-    data_ls = [[data['results']['bindings'][row].get(col, {}).get('value') for col in data['head']['vars']] for row in range(len(data['results']['bindings']))]
-
-    return pd.DataFrame(data_ls, columns=data['head']['vars'])
-
-
-def run_all(meta_info, c: YamlConfig = None, process=False, doTxt=False):
-
-    global fileContribs
-    global d_files
-    global produced
-
-    prev = None
-    def_citations = [doi_citation('10.18160/0F1E-DKXT'),
-                     doi_citation('10.18160/ATM_NRT_CO2_CH4')]
-
-    # Unique dataset nr in the obspack product.
-    if c.gas == 'co2':
-        nr = 1000
-        fact = 1e6
-        calib = 'WMO CO2 X2019'
-    elif c.gas == 'ch4':
-        nr = 2000
-        fact = 1e9
-        calib = 'WMO X2004A'
-    elif c.gas == 'n2o':
-        nr = 3000
-        fact = 1e9
-        calib = 'NOAA-2006A'
-    elif c.gas == 'co':
-        nr = 4000
-        fact = 1e6
-        calib = 'WMO X2014A'
-    else:
-        exit(f'Unknown or not implemented gas: {c.gas}.\nAborting...')
-
-    stations = meta.list_stations(ATMO_STATION)
-    produced = pd.DataFrame()
-    for st in stations:
-        # Only atmospheric stations
-        station_meta = meta.get_station_meta(st.uri)
-        st_id = st.id
-        if st_id != prev:
-            prev = st_id
-            print(st_id)
-            st_class = station_meta.specificInfo.stationClass
-            data = meta_info[meta_info['stationId'] == st_id]
-
-            # Look up the list of relevant data for these stations,
-            # list of associated sampling heights and determine the
-            # maximum sampling height.
-            maxh = 0
-            heights = []
-            use_data = []
-            for i, do in data.iterrows():
-                if do.hgh is not None:
-                    maxh = max(float(do.hgh), maxh)
-                    if (st_id == 'HUN') and (abs(float(do.hgh) - 48.0) < 1):
-                        heights.append(50)
-                    else:
-                        heights.append(float(do.hgh))
-                else:
-                    maxh = 0
-                    heights.append(0.0)
-            # Deduplicate the list of available sampling heights.
-            hgh = [ii for n, ii in enumerate(heights) if ii not in heights[:n]]
-
-            # now go through the sampling height of each station one by one
-            # if st_id!='CRP':
-            # if st_id=='HFD':
-            # if True:
-            if st_class in ['1', '2']:
-                for h in hgh:
-                    treat_data = []
-                    citations = []
-                    d_files = []
-                    for i, do in data.iterrows():
-                        if do.hgh is not None:
-                            if abs(float(do.hgh) - h) < 2.5:
-                                if (st_id == 'JFJ') and (
-                                        abs(float(do.hgh) - 5.0) < 1):
-                                    maxh = maxh
-                                else:
-                                    s = Dobj(do.uri)
-                                    treat_data.append(do.uri)
-                                    if st_id == 'HFD':
-                                        add_roles(c=c, pid='HFD')
-                                    else:
-                                        add_roles(c=c, pid=do.uri)
-                                    citations = citations + [s.citation]
-                                    d_files = d_files + [do.uri.replace(
-                                        'https://meta.icos-cp.eu/objects/',
-                                        '')]
-                    if len(treat_data) > 1:
-                        citations = def_citations + citations
-                    # Station class 1 or 2; ICOS stations only.
-                    if len(treat_data) > 0:
-                        print(st_id, ' Height:', h, ' Class:', st_class,
-                              ' NrFiles:', len(treat_data))
-                        if process:
-                            lab_nr = c.icos_stations[
-                                c.icos_stations.Hist == st_id
-                                ].NOAALabNr.values[0]
-                            fileContribs = pd.DataFrame()
-                            if len(hgh) > 1:
-                                file_name = (
-                                        c.gas + '_' + st_id.lower() +
-                                        '_tower-insitu_' + str(int(lab_nr)) +
-                                        '_allvalid-' + str(int(h)) + 'magl')
-                            else:
-                                file_name = (
-                                        c.gas + '_' + st_id.lower() +
-                                        '_surface-insitu_' + str(int(lab_nr)) +
-                                        '_allvalid')
-                            f_name = './data/' + c.gas + '/png/' + file_name
-                            df = analyse_station(c=c, st_id=st_id, hgh=int(h),
-                                                 dobj_list=treat_data,
-                                                 f_name=f_name)
-
-                            if not df.empty:
-                                fileContribs = cleanupAuthorList(fileContribs)
-                                print(fileContribs)
-                                person = personlist(fileContribs)
-                                #                                    try:
-                                ncfolder = './data/' + gas + '/nc/'
-                                write2nc(file_name, df, stationmeta, citations,
-                                         obspack_set, persons=person, hgh=h,
-                                         gas=gas, calibScale=calib,
-                                         factor=fact, ncfolder=ncfolder,
-                                         txtfolder='./data/' + gas + '/txt/',
-                                         nc_cnt=nr, doTxt=doTxt, doicite=doi)
-                                #                                    except:
-                                #                                        print('Error writing: ',file_name)
-                                produced = produced.append(
-                                    {'fname': file_name, 'folder': ncfolder,
-                                     'station': st_id, 'hgh': h, 'hash': '',
-                                     'Handle': ''}, ignore_index=True)
-                                nr = nr + 1
-
-
-def add_roles(c: YamlConfig = None, pid: any = None):
-    # Add contributors for file with this PID to the global contribs dataframes
-    roles, info = get_roles(c=c, f_pid=pid)
-    c.col_contribs = pd.concat([roles, c.col_contribs])
-    return roles
-
-
-# look up station uri in dataset meta info and harvest contributor info for that station into a dataframe
-def get_roles(c: YamlConfig = None, f_pid: any = None):
-    if e.ICOS_CONFIG.station_prefix in f_pid:
-        station_url = f_pid
-    elif len(f_pid) < 7:
-        station_url = e.ICOS_CONFIG.station_prefix + f_pid
-    else:
-        obj = Dobj(f_pid)
-        meta = obj.meta
-        # citation=meta['references']['citationString']
-        station_url = \
-            meta['specificInfo']['acquisition']['station']['org']['self']['uri']
-    if c.debug:
-        print(station_url)
-    df = pd.DataFrame()
-
-    headers = CaseInsensitiveDict()
-    headers["Accept"] = "application/json"
-    resp = requests.get(station_url, headers=headers)
-    info = json.loads(resp.text)
-
-    if 'ATMO_' in station_url:
-        # if debug: print(info)
-        authors = meta['references']['authors']
-        # if debug: print(authors)
-        for author in authors:
-            row = pd.DataFrame([{
-                'fname': author['firstName'],
-                'lname': author['lastName'],
-                'orcid': '',
-                'uri': author['self']['uri'],
-                'weight': 30,
-                'start': None,
-                'end': None
-            }])
-            df = df.concat([df, row], ignore_inde=True)
-    else:
-        for person in info['staff']:
-            fname = person['person']['firstName']
-            lname = person['person']['lastName']
-            # if debug: print(person)
-            uri = person['person']['self']['uri']
-            try:
-                orcid = person['person']['orcid']
-            except:
-                orcid = ''
-            try:
-                wght = person['role']['weight']
-            except:
-                wght = None
-            try:
-                start = person['role']['start']
-            except:
-                start = None
-            try:
-                end = person['role']['end']
-            except:
-                end = None
-            row = pd.DataFrame([{
-                'fname': fname,
-                'lname': lname,
-                'orcid': orcid,
-                'uri': uri,
-                'weight': wght,
-                'start': start,
-                'end': end
-            }])
-            df = pd.concat([df, row], ignore_index=True)
-
-    if 'HFD' in station_url:
-        row = pd.DataFrame([{
-            'fname': 'Chris',
-            'lname': 'Rennick',
-            'orcid': '0000-0003-4993-0156',
-            'uri': 'http://meta.icos-cp.eu/resources/people/chris_rennick',
-            'weight': 100,
-            'start': None,
-            'end': None
-        }])
-        df = df.concat([df, row], ignore_inde=True)
-    if 'ZOT' in station_url:
-        row = pd.DataFrame([{
-            'fname': 'Sönke',
-            'lname': 'Zähle',
-            'orcid': '0000-0001-5602-7956',
-            'uri': 'http://meta.icos-cp.eu/resources/people/S%C3%B6nke_Zaehle',
-            'weight': 100,
-            'start': None,
-            'end': None
-        }])
-        df = df.concat([df, row], ignore_inde=True)
-    if c.debug:
-        print(df)
-
-    return df, info
-
-
-def citation(c: YamlConfig, as_contrib: bool = False) -> str:
-    """Return the formatted citation json."""
-    data_col = 'DataCollector' if as_contrib else ''
-    data_cur = 'DataCurator' if as_contrib else ''
-    data_dist = 'Distributor' if as_contrib else ''
-    data_man = 'DataManager' if as_contrib else ''
-    s = '"contributors": [' if as_contrib else '"creators": ['
-
-    s = s + inst_dcite_json('ICOS RI', data_dist)
-    for i, person in c.col_contribs.iterrows():
-        if person['weight'] > 0:
-            p_json = p_dcite_json(first_name=person['fname'],
-                                  last_name=person['lname'],
-                                  orcid=person['orcid'],
-                                  contrib_type=data_col)
-            s = s + ',' + p_json
-    s = s + ',' + inst_dcite_json('ICOS Carbon Portal', data_cur)
-    s = s + ',' + inst_dcite_json('ICOS Atmosphere Thematic Centre', data_man)
-    s = s + ',' + inst_dcite_json('ICOS Flask And Calibration Laboratory', data_col)
-    if as_contrib:
-        s = s + ',' + inst_dcite_json('ICOS Flask And Calibration Laboratory', data_cur)
-    s = s + ',' + inst_dcite_json('ICOS Central Radiocarbon Laboratory', data_cur)
-    s = s + ' ]\n'
-    return s
-
-
-def inst_dcite_json(name: str = None, contrib_type: str = None) -> str:
-    """Return the formatted institute datacite json."""
-    s = '  {\n  "name" : {\n    "name" : "'+name+'",\n'
-    s = s + '    "nameType" : "Organizational"\n  },\n'
-    s = s + '  "affiliation" : [ ],\n'
-    if contrib_type is not None:
-        s = s + '  "contributorType" : "'+contrib_type+'",\n'
-    s = s + '  "nameIdentifiers" : [ ]\n'
-    s = s + '  }'
-    return s
-
-
-def p_dcite_json(first_name: str = None, last_name: str = None,
-                 orcid: str = None, affiliation: str = None,
-                 contrib_type: str = None) -> str:
-    """Return the formatted person datacite json."""
-    s = ('  {\n  "name" : {\n    "familyName" : "' + last_name + '",\n' +
-         '    "givenName" : "' + first_name + '",\n' +
-         '    "nameType" : "Personal"\n  },\n')
-    if affiliation is not None:
-        s = s + '  "affiliation" : "' + affiliation + '",\n'
-    else:
-        s = s + '  "affiliation" : [ ],\n'
-    if contrib_type is not None:
-        s = s + '  "contributorType" : "' + contrib_type + '",\n'
-    if orcid is not None:
-        s = (s + '  "nameIdentifiers" : [ {\n' + '    "nameIdentifier" : "' +
-             orcid + '",\n    "scheme" : {\n')
-        s = s + '      "nameIdentifierScheme" : "ORCID",\n'
-        s = s + '      "schemeUri" : "http://orcid.org/"\n    } \n  } ]\n '
-    else:
-        s = s + '  "nameIdentifiers" : [ ]\n'
-    s = s + '  }'
-    return s
-
-
-def get_mauna_loa(c: YamlConfig) -> None:
-    # Todo: do we have to read different trends for different gases?
-    # Get the most recent Mauna Loa CO2 data.
-    # Monthly marine BL global averages:
-    # CH4: https://gml.noaa.gov/webdata/ccgg/trends/ch4/ch4_mm_gl.txt
-    # N2O: https://gml.noaa.gov/webdata/ccgg/trends/n2o/n2o_mm_gl.txt
-
-    mauna_loa = pd.read_csv(
-        'https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.txt',
-        skiprows=37, header=None, names=['JulDate', 'Meas'], delimiter=r'\s+',
-        usecols=[3, 4])
-    mauna_loa = mauna_loa.query('Meas>20').copy()
-    mauna_loa['DateTime'] = mauna_loa['JulDate'].apply(t2dt)
-    mauna_loa.set_index('DateTime', inplace=True)
-    mauna_loa.to_csv(c.mauna_loa)
-    ml = ghg_filter_ts(mauna_loa.JulDate, mauna_loa.Meas) if c.analyse \
-        else pd.DataFrame
-    ml.to_csv(c.ml)
-    return
-
-
-def ghg_filter_ts(time, meas, shortTerm=80, longTerm=667, numPolyterms=3,
-                  numHarmonics=4, timeZero=2010, sampleInterval=1/24) \
-        -> pd.DataFrame:
-    """Function wrapper to the CCGCRV routine from Thonen et al. (1996)
-
-    Filters a timeseries by smoothing and removing higher frequency
-    information and fitting a trend and harmonic oscillation.
-    Specifically, designed for greenhouse gas observations.
-    The input parameters are further described in ccgfilt.py, under the
-    ccgFilter class.
-
-    Input
-    Observational data provided in Pandas dataframe with index datetime
-    as YYYY.fraction and the observation series in the first column.
-
-    Result
-    A dataframe with index datetime containing in the columns the
-    GrowthRate, Function, Poly, SmoothCurve, Trend, Cycle, Residual,
-    Detrended the interpolated sampleInterval
-    """
-
-    gap = 0
-    debug = True
-    filt = ccgfilt.ccgFilter(time, meas, shortTerm, longTerm, sampleInterval,
-                             numPolyterms, numHarmonics, timeZero, gap, debug)
-
-    # Get x,y data for plotting
-    x0 = filt.xinterp
-    y1 = filt.getFunctionValue(x0)
-    y2 = filt.getPolyValue(x0)
-    y3 = filt.getSmoothValue(x0)
-    y4 = filt.getTrendValue(x0)
-    y5 = y3 - y4
-
-    # Seasonal Cycle
-    # x and y are original data points
-    trend = filt.getTrendValue(time)
-    detrend = meas - trend
-    harmonics = filt.getHarmonicValue(x0)
-    smooth_cycle = harmonics + filt.smooth - filt.trend
-    # residuals from the function
-    resid_from_func = filt.resid
-    # smoothed residuals
-    resid_smooth = filt.smooth
-    # trend of residuals
-    resid_trend = filt.trend
-    # residuals about the smoothed line
-    resid_from_smooth = filt.yp - filt.getSmoothValue(meas.index)
-    deriv = filt.deriv
-
-    return pd.DataFrame({'GrowthRate': deriv, 'Function': y1, 'Poly': y2,
-                         'SmoothCurve': y3, 'Trend': y4, 'Cycle': smooth_cycle,
-                         'Residual': resid_trend, 'Detrended': y5},
-                        index=pd.Index(x0, name='datetime'))
-
-
-def get_glb_avg_ch4(c: YamlConfig) -> None:
-    # Todo: do we have to read different trends for different gases?
-    mauna_loa_ch4 = pd.read_csv(
-        'https://gml.noaa.gov/webdata/ccgg/trends/ch4/ch4_mm_gl.txt',
-        skiprows=65, header=None, names=['JulDate', 'Meas'], delimiter=r'\s+',
-        usecols=[2, 3]
-    )
-    mauna_loa_ch4 = mauna_loa_ch4.query('Meas>20').copy()
-    mauna_loa_ch4['DateTime'] = mauna_loa_ch4['JulDate'].apply(t2dt)
-    mauna_loa_ch4.set_index('DateTime', inplace=True)
-    mauna_loa_ch4.to_csv(c.glb_avg_ch4)
-    return
-
-
-def t2dt(atime: float) -> dt.datetime:
-    """Converts a fractional year timestamp to a datetime object."""
-    year = int(atime)
-    remainder = atime - year
-    boy = dt.datetime(year, 1, 1)
-    eoy = dt.datetime(year + 1, 1, 1)
-    seconds = remainder * (eoy - boy).total_seconds()
-    return boy + dt.timedelta(seconds=seconds)
-
-
-def doi_citation(doi_id: str = None, citation_style: str = 'elsevier-harvard') \
-        -> str:
-    headers = CaseInsensitiveDict()
-    headers['Accept'] = 'text/x-bibliography; style=' + citation_style
-    resp = requests.get('https://doi.org/'+doi_id, headers=headers)
-    return resp.text if resp.status_code == 200 else 'citation not found'
-
-
-def analyse_station(c: YamlConfig = None, st_id: str = None, hgh: int = None,
-                    dobj_list: list = None, f_name: str = None):
-    """Run ccgfilt for Mauna Loa and the chosen station."""
-    f_name = f_name + '.png' if c.plot else ''
-    icos_df = get_icos_ts(c=c, dobj_list=dobj_list, hgh=hgh, download=True)
-    if icos_df.empty:
-        print('No data found for station ' + st_id + ' ' + str(hgh))
-    else:
-        if c.plot:
-            try:
-                df = ghg_filter_ts(icos_df.JulDate, icos_df.Meas)
-                mau = c.mauna_loa if c.gas == 'co2' else glob_average(c.gas)
-                if c.gas == 'co2':
-                    gas_name = 'CO${_2}$'
-                    unit = '[µmol/mol]'
-                    limy = [380, 460]
-                    back = c.ml
-                    mau = c.mauna_loa
-                elif c.gas == 'ch4':
-                    gas_name = 'CH${_4}$'
-                    unit = '[nmol/mol]'
-                    limy = [1800, 2500]
-                    back = pd.DataFrame()
-                elif c.gas == 'n2o':
-                    gas_name = 'N${_2}$O'
-                    unit = '[nmol/mol]'
-                    limy = [315, 370]
-                    back = pd.DataFrame()
-
-                nicePlot(df,back,icos_df,mau,MeasName=gas_name,Unit=unit,Station=st_id+' '+str(hgh),
-                         pngfile=file,xlim=[2010,2025.1],ylim=limy)
-            except:
-                print('Error in time filtering for station ',st_id,'; plot skipped')
-    return icos_df
-
-
-def get_icos_ts(c: YamlConfig = None, dobj_list: list = None, hgh: int = None,
-                download: bool = False):
-
-    time_start_l2 = dt.datetime.now()
-    time_end_l2 = dt.datetime.now()
-
-    data_df_ls = []
-    data_lx_df = pd.DataFrame()
-
-    for rdo in dobj_list:
-        do = Dobj(rdo)
-        fast = False
-        spec = do.meta['specification']['self']['uri']
-        level = int(do.meta['specification']['dataLevel'])
-        if level == 2:
-            if 'L2DataObject' in spec:
-                # Get date & time for 1st & last observation:
-                time_start_l2 = dt.datetime.strptime(
-                    do.meta['specificInfo']['acquisition']['interval'][
-                        'start'], '%Y-%m-%dT%H:%M:%SZ')
-                time_end_l2 = dt.datetime.strptime(
-                    do.meta['specificInfo']['acquisition']['interval']['stop'],
-                    '%Y-%m-%dT%H:%M:%SZ')
-                level = 3
-            else:
-                level = 0
-        else:
-            if level == 1:
-                if 'FastTrack' in spec:
-                    time_end_fast = dt.datetime.strptime(
-                        do.meta['specificInfo']['acquisition']['interval'][
-                            'stop'], '%Y-%m-%dT%H:%M:%SZ')
-                    level = 2
-
-    for rdo in dobj_list:
-        do = Dobj(rdo)
-        spec = do.meta['specification']['self']['uri']
-        level = do.meta['specification']['dataLevel']
-        project = do.meta['specification']['project']['self']['label']
-        print(spec)
-        if level == 2:
-            if 'L2DataObject' in spec:
-                level = 3
-            else:
-                level = 0
-        if level == 1:
-            if 'FastTrack' in spec:
-                fast = True
-                level = 2
-
-        # Get pandas dataframe
-        if download:
-            obs_data_df = get_icos_atm_product(c=c, dobj=do, level=level)
-        else:
-            obs_data_df = do.getColumns()
-            obs_data_df['Datetime'] = pd.to_datetime(obs_data_df['TIMESTAMP'])
-            obs_data_df = obs_data_df.set_index('Datetime')
-
-        # Check if dobj corresponds to NRT data product:
-        if level == 1:
-            # Filter dataframe by quality flag value:
-            if fast:
-                obs_data_df = obs_data_df[time_end_l2:]
-            else:
-                obs_data_df = obs_data_df[time_end_fast:]
-            if useflags:
-                obs_data_df = obs_data_df.loc[obs_data_df.Flag == 'U']
-        else:
-            if level == 0:
-                # Filter dataframe by quality flag value and only values before L2 data start:
-                time_start_l0 = dt.datetime.strptime(
-                    do.meta['specificInfo']['acquisition']['interval'][
-                        'start'], '%Y-%m-%dT%H:%M:%SZ')
-                time_end_l2 = dt.datetime.strptime(
-                    do.meta['specificInfo']['acquisition']['interval']['stop'],
-                    '%Y-%m-%dT%H:%M:%SZ')
-                obs_data_df = obs_data_df.query('Datetime < @time_start_l2')
-            if useflags:
-                obs_data_df = obs_data_df[obs_data_df['Flag'].isin(['O', 'U'])]
-
-            # Add data dataframe of the current data object ID to the list:
-        if level == 3:
-            obs_data_df['Level'] = 2
-        elif level == 2:
-            obs_data_df['Level'] = 15
-        elif level == 1:
-            obs_data_df['Level'] = 1
-
-        if (level == 0) & (len(obs_data_df) > 1):
-            obs_data_df['Level'] = 0
-            obs_data_df.loc[(obs_data_df.index >= time_start_l2) & (
-                        obs_data_df.index <= time_end_l2), 'Level'] = 2
-
-        data_df_ls.append(obs_data_df)
-        contrib, info = get_roles(c=c, f_pid=do.id)
-        c.file_contribs = pd.concat([contrib, c.file_contribs])
-
-    # Concatenate list of dataframes to one dataframe:
-    data_lx_df = pd.concat(data_df_ls)
-
-    # Sort the dataframe index in ascending order:
-    data_lx_df.sort_index(inplace=True)
-
-    # Change column name from "co2" to "Meas":
-    data_lx_df.rename({'co2': 'Meas'}, axis='columns', inplace=True)
-
-    # if needed add column with Julian Year:
-    if 'JulDate' not in data_lx_df:
-        data_lx_df['JulDate'] = [toYearFraction(i) for i in data_lx_df.index]
-
-    # if present drop column TIMESTAMP:
-    if 'TIMESTAMP' in data_lx_df:
-        data_lx_df.drop('TIMESTAMP', axis=1, inplace=True)
-
-    # Return dataframe:
-    return data_lx_df
-
-
-def glob_average(gas: str = None) -> pd.DataFrame:
-    skip_rows = 40 if gas == 'co2' else 48
-    url = f'https://gml.noaa.gov/webdata/ccgg/trends/{gas}/{gas}_mm_gl.txt'
-    global_aver = pd.read_csv(url, skiprows=skip_rows, header=None,
-                              names=['JulDate', 'Meas'], delimiter=r"\s+",
-                              usecols=[2, 3])
-    global_aver = global_aver.query('Meas>20')
-    global_aver['DateTime'] = [t2dt(i) for i in global_aver.JulDate]
-    global_aver.set_index('DateTime', inplace=True)
-    return global_aver
-
-
-def get_icos_atm_product(c: YamlConfig = None, dobj: Dobj = None,
-                         level: int = None):
-    """
-    Get ICOS atmospheric data.
-
-    Download ICOS ATM data by directly accessing the data objects from
-    the Carbon Portal; this will trigger the download count for each
-    object, unless we are on the blocklist.
-    """
-    def count(s, ch):
-        """Count occurrences of a character in a string."""
-        cnt = 0
-        for i in s:
-            if i == ch:
-                cnt += 1
-        return cnt
-
-    def readfile(source: Path | IO[bytes] = None) -> pd.DataFrame:
-        # Read the ICOS data object by using the io-stream handle and parse as csv
-        # using the predefined column definitions and length of header.
-        # Reading this column definitions from the io-stream directly needs seek to work and that fails,
-        # so this part is commented out
-        #        for i in range(0,45):
-        #            header = f.readline()
-        #            print(header)
-        #        head=str(header)[3:-3]
-        #        colnames="['"+head.replace(';',"','")+"']"
-        #        nrcols=count(colnames,',')+1
-        #        print(nrcols)
-        #        print('Columns: ', colnames)
-        #        f.seek(0)
-        #        df = pd.read_csv(f,skiprows=skip[level],header=None,names=colnames[level],delimiter=';',usecols=range(0,nrcols[level]-1))
-        if c.debug:
-            print('File name: ', fname)
-            print('Level: ', level)
-            print('Columns: ', colnames[level])
-            print('Cols : ', nrcols[level])
-        ret_df = pd.read_csv(source, comment='#', header=None,
-                             names=colnames[level], delimiter=';',
-                             usecols=range(0, nrcols[level] - 1))
-        return ret_df
-
-    # modify the url to allow download by accepting the data license explicitly
-    url = dobj.meta['accessUrl'].replace('https://data.icos-cp.eu/objects/',
-                                         'https://data.icos-cp.eu/licence_accept?ids=%5B%22') + '%22%5D'
-    print('url:', url)
-
-    # Get the data object from CP, unless we have the file in cache
-    # already, if not, save it there.
-    fname = Path(c.output, './cache/', dobj.meta['fileName'])
-    # fname = './cache/' + dobj.meta['fileName']
-    if not fname.exists():
-        r = requests.get(url, allow_redirects=True)
-        with open(fname, 'wb') as f:
-            f.write(r.content)
-        print('filled cache with ', fname)
-    else:
-        print('hit cache for ', fname)
-    if fname.suffix == '.zip':
-        zf = zipfile.ZipFile(fname, 'r')
-        for item in zf.namelist():
-            if c.debug:
-                print("File in zip: " + item)
-        match = [s for s in zf.namelist() if 'ICOS_ATC' in s][0]
-        df = readfile(source=zf.open(match))
-    else:
-        df = readfile(source=fname)
-
-    #    # access the url and open an io stream to it, if the file is zipped, unzip the stream, and pass the file to a dataframe
-    #    r = requests.get(url, allow_redirects=True)
-    #    if r.headers.get('content-type')=='application/zip':
-    #        filename = r.content
-    #        zf = zipfile.ZipFile(io.BytesIO(filename), 'r')
-    #        for item in zf.namelist():
-    #            if debug: print("File in zip: "+ item)
-    #        match = [s for s in zf.namelist() if "ICOS_ATC" in s][0]
-    #        df=readfile(zf.open(match))
-    #    else:
-    #        s=r.content
-    #        df=readfile(io.StringIO(s.decode('utf-8')))
-
-    # do some bookkeeping, like removing useless time columns, using a true datetime and indexing
-    df.rename({'DecimalDate': 'JulDate'}, axis='columns', inplace=True)
-    df['Datetime'] = [t2dt(i) for i in df['JulDate']]
-    df = df.set_index('Datetime')
-    df.drop(['Year', 'Month', 'Day', 'Hour', 'Minute'], axis=1, inplace=True)
-
-    # if debug set printing of url and dataframe
-    if c.debug:
-        print(url, ' ', df)
-
-    return df
 
 
 # Main program for producing obspack nc files from icos and non-icos
@@ -1741,8 +1734,8 @@ def get_icos_atm_product(c: YamlConfig = None, dobj: Dobj = None,
 useflags = True
 printas = '.png'  # set to None for no saving of plots
 
-config = Config().config
-init(c=config)
-info = process_obspack(c=config)
-run_all(meta_info=info, c=config, process=True, doTxt=True)
+c = Config().c
+init()
+info = process_obspack()
+run_all(meta_info=info, process=True)
 

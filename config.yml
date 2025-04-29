@@ -1,5 +1,9 @@
 gas: 'n2o'
 output: ''
+data: ''
+nc: ''
+png: ''
+txt: ''
 analyse: true
 plot: true
 lab_numbers: 'input/lab_numbers.csv'
