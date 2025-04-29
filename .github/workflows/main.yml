@@ -1,5 +1,5 @@
 name: Lint code
-run-name: ${{ github.actor }} is linting ${{ github.repository }} with all supported versions of python 🚀
+run-name: ${{ github.actor }} is linting ${{ github.repository }} 🧹
 
 on:
   push:
@@ -12,6 +12,7 @@ permissions:
   
 jobs:
   lint:
+    name: linting with Python ${{ matrix.python-version }} 🧹
     runs-on: ubuntu-latest
     strategy:
       matrix:
