@@ -1647,7 +1647,7 @@ def generate_meta(
 
         json_package = {
             "submitterId": "CP",
-            "hashSum": get_hash_sum(file_path=f_name),
+            "hashSum": get_hash_sum(path=f_name),
             "fileName": f_name.name,
             "specificInfo": {
                 "station": xarray_ds.site_url,

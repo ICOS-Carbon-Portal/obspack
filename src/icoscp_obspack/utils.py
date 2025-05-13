@@ -1,16 +1,18 @@
 # Standard library imports.
-from http.cookiejar import CookieJar
-from pathlib import Path
-from typing import Optional, Any
+import datetime as dt
+import hashlib
 import json
 import sys
+from http import HTTPStatus
+from http.cookiejar import CookieJar
+from pathlib import Path
+from typing import Any
 
 # Related third party imports.
-from icoscp_core import icos, auth
+import requests
+from icoscp_core import icos
 from icoscp_core.sparql import SparqlResults
 from requests.utils import cookiejar_from_dict
-import datetime as dt
-import requests
 
 # Local application/library specific imports.
 from icoscp_obspack.constants import icons as i
@@ -26,7 +28,7 @@ def is_notebook():
         return False
 
 
-def progress_bar(current: int = None, total: int = None, bar_length: int = 20) -> None:
+def progress_bar(current: int | None = None, total: int | None = None, bar_length: int = 20) -> None:
     """Outputs a loading-like bar."""
     fraction = current / total
     arrow = int(fraction * bar_length - 1) * '-' + '>'
@@ -46,9 +48,9 @@ def progress_bar(current: int = None, total: int = None, bar_length: int = 20) -
             sys.stdout.write(f' {i.ICON_CHECK}\n')
 
 
-def new_file_info(uri: str = None):
+def new_file_info(uri: str | None = None):
     response = requests.get(uri, headers={'Accept': 'application/json'})
-    if response.status_code == 200:
+    if response.status_code == HTTPStatus.OK:
         data = response.json()
         return data
     else:
@@ -57,7 +59,7 @@ def new_file_info(uri: str = None):
 
 
 def t2dt(atime: float) -> dt.datetime:
-    """Converts a fractional year timestamp to a datetime object."""
+    """Convert a fractional year timestamp to a datetime object."""
     year = int(atime)
     remainder = atime - year
     boy = dt.datetime(year, 1, 1)
@@ -73,12 +75,11 @@ def write_json(path: str, content: dict[str, Any], convert_posix: bool = True
         posix_to_str(content)
     with open(file=path, mode='w+') as json_handle:
         json.dump(content, json_handle, indent=4)
-    return
 
 
 def read_json(path: str) -> Any:
     """Read dictionary from json file."""
-    with open(file=path, mode='r') as json_handle:
+    with open(file=path) as json_handle:
 
         json_data = json.load(json_handle)
     str_to_posix(json_data)
@@ -92,12 +93,11 @@ def posix_to_str(content: dict[str, Any]) -> None:
     if 'file_path' in content:
         content['file_path'] = str(content['file_path'])
     else:
-        for key, sub_dict in content.items():
+        for _key, sub_dict in content.items():
             if 'file_path' in sub_dict:
                 sub_dict['file_path'] = str(sub_dict['file_path'])
             if 'json_file_path' in sub_dict:
                 sub_dict['json_file_path'] = str(sub_dict['json_file_path'])
-    return
 
 
 # Todo: refactor this to correctly handle posix paths in dictionaries
@@ -107,18 +107,17 @@ def str_to_posix(content: dict[str, Any]) -> None:
     if 'file_path' in content:
         content['file_path'] = Path(content['file_path'])
     else:
-        for key, sub_dict in content.items():
+        for _key, sub_dict in content.items():
             if 'file_path' in sub_dict:
                 sub_dict['file_path'] = Path(sub_dict['file_path'])
             if 'json_file_path' in sub_dict:
                 sub_dict['json_file_path'] = Path(sub_dict['json_file_path'])
-    return
 
 
-def get_cookie_jar() -> Optional[CookieJar]:
-    cookie_string = str()
-    cookie_jar: Optional[CookieJar] = None
-    cookie_dict = dict()
+def get_cookie_jar() -> CookieJar | None:
+    cookie_string = ''
+    cookie_jar: CookieJar | None = None
+    cookie_dict = {}
     try:
         cookie_string = icos.auth.get_token().cookie_value
     except Exception as e:
@@ -142,11 +141,9 @@ def get_cookie_jar() -> Optional[CookieJar]:
 
 
 def get_prev_by_name(anchor: str) -> str:
-    prev_version = str()
-
+    prev_version = ''
     query_template = """
     PREFIX cpmeta: <http://meta.icos-cp.eu/ontologies/cpmeta/>
-    
     SELECT ?dobj
     WHERE {
         VALUES ?spec {
@@ -170,8 +167,10 @@ def get_prev_by_name(anchor: str) -> str:
     return prev_version
 
 
-def get_hash_sum(file_path: str | Path = None) -> str:
+def get_hash_sum(path: str | Path | None = None) -> str:
     """Calculate and return hash-sum of given file."""
-    with open(file=file_path, mode='rb') as f_hdl:
+    if path is None:
+        raise ValueError("A valid file path must be provided.")
+    with open(file=path, mode='rb') as f_hdl:
         data = f_hdl.read()
     return hashlib.sha256(data).hexdigest()
