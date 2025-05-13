@@ -19,11 +19,13 @@ dependencies = [
 	"icoscp",
 	"icoscp_core==0.3.7",
 	"matplotlib==3.6.0",
+	"netCDF4==1.7.2",
 	"pyyaml==6.0.2",
 	"requests==2.32.3",
 	"scipy==1.15.2",
 	"xarray==2025.3.1",
-	"netCDF4==1.7.2"
+    "numpy==1.26.4",
+    "seaborn==0.13.2",
 ]
 
 [project.urls]
@@ -41,7 +43,7 @@ python = ["3.10", "3.11", "3.12", "3.13"]
 
 [tool.hatch.envs.lint.scripts]
 lint = [
-	"ruff check {args: src/icoscp_obspack}",
+    "ruff check {args: src/icoscp_obspack}"
 ]
 
 [tool.ruff]
