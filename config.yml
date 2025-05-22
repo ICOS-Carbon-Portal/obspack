@@ -1,14 +1,21 @@
 gas: 'n2o'
-output: ''
-nc: ''
-json: ''
-txt: ''
-png: ''
-pickle: ''
-zip: ''
+submitted_after: '2023-01-01'
+input: 'input'
+output: 'output'
+nc:
+json:
+txt:
+png:
+pickle:
+zip:
 analyse: true
 plot: false
 do_png: true
 do_txt: true
 debug: false
 refresh_pickles: true
+use_mauna_loa_for_global_co2:
+use_flags: True
+lab_numbers:
+icos_stations:
+header:

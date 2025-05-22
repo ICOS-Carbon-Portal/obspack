@@ -3,7 +3,8 @@ import datetime as dt
 import hashlib
 import json
 import sys
-from http import HTTPStatus
+import time
+from datetime import date
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Any
@@ -12,23 +13,14 @@ from typing import Any
 import requests
 from icoscp_core import icos
 from icoscp_core.sparql import SparqlResults
+from requests.structures import CaseInsensitiveDict
 from requests.utils import cookiejar_from_dict
 
 # Local application/library specific imports.
 from icoscp_obspack.constants import icons as i
 
 
-def is_notebook():
-    """Detect if running in a Jupyter notebook."""
-    try:
-        from IPython import get_ipython
-        shell = get_ipython().__class__.__name__
-        return shell == 'ZMQInteractiveShell'
-    except Exception:
-        return False
-
-
-def progress_bar(current: int | None = None, total: int | None = None, bar_length: int = 20) -> None:
+def progress_bar(current: int, total: int, bar_length: int = 20) -> None:
     """Outputs a loading-like bar."""
     fraction = current / total
     arrow = int(fraction * bar_length - 1) * '-' + '>'
@@ -36,26 +28,11 @@ def progress_bar(current: int | None = None, total: int | None = None, bar_lengt
     percent = int(fraction * 100)
     bar = f'Getting file metadata [{arrow}{padding}] {percent}%'
 
-    if is_notebook():
-        print(bar, end='\r', flush=True)
-        if current == total:
-            print()
-    else:
-        # Terminal or IDE console
-        sys.stdout.write('\r' + bar)
-        sys.stdout.flush()
-        if current == total:
-            sys.stdout.write(f' {i.ICON_CHECK}\n')
-
-
-def new_file_info(uri: str | None = None):
-    response = requests.get(uri, headers={'Accept': 'application/json'})
-    if response.status_code == HTTPStatus.OK:
-        data = response.json()
-        return data
-    else:
-        print('Error fetching data')
-        return 'Error'
+    # Terminal or IDE console
+    sys.stdout.write('\r' + bar)
+    sys.stdout.flush()
+    if current == total:
+        sys.stdout.write(f' {i.ICON_CHECK}\n')
 
 
 def t2dt(atime: float) -> dt.datetime:
@@ -66,6 +43,23 @@ def t2dt(atime: float) -> dt.datetime:
     eoy = dt.datetime(year + 1, 1, 1)
     seconds = remainder * (eoy - boy).total_seconds()
     return boy + dt.timedelta(seconds=seconds)
+
+
+def toYearFraction(date: date) -> float:
+
+    def sinceEpoch(date): # returns seconds since epoch
+        return time.mktime(date.timetuple())
+    s = sinceEpoch
+
+    year = date.year
+    startOfThisYear = dt.datetime(year=year, month=1, day=1)
+    startOfNextYear = dt.datetime(year=year+1, month=1, day=1)
+
+    yearElapsed = s(date) - s(startOfThisYear)
+    yearDuration = s(startOfNextYear) - s(startOfThisYear)
+    fraction = yearElapsed/yearDuration
+
+    return date.year + fraction
 
 
 def write_json(path: str, content: dict[str, Any], convert_posix: bool = True
@@ -174,3 +168,11 @@ def get_hash_sum(path: str | Path | None = None) -> str:
     with open(file=path, mode='rb') as f_hdl:
         data = f_hdl.read()
     return hashlib.sha256(data).hexdigest()
+
+
+def doi_citation(doi_id: str = '', citation_style: str = 'elsevier-harvard') \
+        -> str:
+    headers = CaseInsensitiveDict()
+    headers['Accept'] = 'text/x-bibliography; style=' + citation_style
+    resp = requests.get('https://doi.org/'+doi_id, headers=headers)
+    return resp.text if resp.status_code == requests.codes.ok else 'citation not found'

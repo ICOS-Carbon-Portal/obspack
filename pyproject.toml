@@ -49,7 +49,7 @@ lint = [
 [tool.ruff]
 target-version = "py310"
 line-length = 110
-exclude = ["ccgfilt.py", "split_this.py"]
+exclude = ["ccgfilt.py", "plotting.py", "ts_filter.py", "netcdf.py", "split_this.py", "unused.py"]
 
 lint.select = [
   "A",   # flake8-builtins
@@ -68,4 +68,5 @@ lint.select = [
 lint.ignore = [
   "E501",  # line too long (we already control with line-length)
   "PLR0913", # too many arguments (can be noisy in scientific code)
+  "UP007",
 ]
