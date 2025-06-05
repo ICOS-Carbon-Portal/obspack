@@ -48,8 +48,8 @@ def plot_timeseries_station(
         print(f'Error in time filtering for station {st_id}; plot skipped due to: {plot_exception}')
 
 
-def generate_plot(df, back, meas, mlo, meas_name: str = '', unit: str = '', station: str = '',
-                  png_file: Optional[Path] = None, x_lim: list = [], y_lim: list = [], do_png: bool = True, plot: bool = False):
+def generate_plot(df, back, meas, mlo, meas_name: str = None, unit: str = None, station: str = None,
+                  png_file: Path = None, x_lim: list = None, y_lim: list = None):
     """Plot measurements, trend, smoothed curve."""
     l2 = meas.loc[meas.Level == 2]
     ax1 = l2.plot(x='JulDate', y='Meas', fontsize=12, label=station+' L2', linewidth=0, color='green',
@@ -68,10 +68,10 @@ def generate_plot(df, back, meas, mlo, meas_name: str = '', unit: str = '', stat
     sns.set_style("white")
     df.plot(y='Trend', ax=ax1, color='black', label='Trend from '+station)
     if not back.empty:
+        back = back.set_index('datetime')
         back.plot(y='Trend', ax=ax1, color='yellow', linestyle="--", label='Global trend')
     mlo.plot(x='JulDate', y='Meas', ax=ax1, linewidth=0, color='red', marker='+', markersize=3,
              label='Global av.')
-    h1, l1 = ax1.get_legend_handles_labels()
     # Remove the top right second legend.
     ax1.get_legend().remove()
     plt.xticks(np.arange(x_lim[0], x_lim[1], step=1))
@@ -79,11 +79,11 @@ def generate_plot(df, back, meas, mlo, meas_name: str = '', unit: str = '', stat
     df.SmoothCurve.plot(ax=ax1, fontsize=12, color='blue', label='Smoothed curve '+station)
     ax1.set_xlabel('Year', fontsize=14)
     ax1.grid(zorder=0, linestyle='-.', color='grey')
-    plt.legend(h1, l1, loc=2)
+    plt.legend(loc=2)
     plt.xlim(x_lim)
     plt.ylim(y_lim)
-    if png_file is not None and do_png:
+    if png_file is not None and c.do_png:
         plt.savefig(png_file, dpi=150)
-    if plot:
+    if c.plot:
         plt.show(close=True)
     plt.close()
