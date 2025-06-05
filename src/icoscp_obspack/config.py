@@ -19,6 +19,7 @@ YAML_CONFIG = '../config.yml'
 @dataclass()
 class YamlConfig:
     gas: str
+    doi: str
     submitted_after: str
     input: Optional[str]
     output: Optional[str]

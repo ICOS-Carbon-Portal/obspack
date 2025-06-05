@@ -7,9 +7,10 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-# Local application/library specific imports.
+# Local application/library-specific imports.
 from icoscp_obspack.constants import icons
 from icoscp_obspack.utils.utils import get_cookie_jar
+
 
 gas = input('Please specify gas ("co2", "ch4", "n2o"): ')
 produced = pd.read_csv(f'output/{gas}/produced.csv')
@@ -17,6 +18,9 @@ collection = []
 for _i, row in produced.iterrows():
     data_file_path = Path(row.folder, f'{row.fname}.nc')
     json_file_path = Path(row.folder.replace('nc-files', 'json-files'), f'{row.fname}.json')
+    if gas == 'n2o' and 'svb' in str(json_file_path.resolve()):
+        continue
+    print(json_file_path)
     # Upload metadata.
     upload_meta_resp = requests.post(
         url='https://meta.icos-cp.eu/upload',
@@ -31,7 +35,7 @@ for _i, row in produced.iterrows():
         # Todo: correctly try-except the http request.
         print(upload_meta_resp.text)
         sys.exit('Something went wrong when uploading metadata. The application will now exit.')
-    # Upload data.
+        # Upload data.
     upload_data_resp = requests.put(
         url=upload_meta_resp.text,
         cookies=get_cookie_jar(),
