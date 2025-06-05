@@ -15,6 +15,7 @@ from icoscp_obspack.utils import t2dt
 @dataclass()
 class YamlConfig:
     gas: str
+    doi: str
     analyse: bool
     plot: bool
     output: str

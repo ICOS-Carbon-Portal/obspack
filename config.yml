@@ -1,4 +1,6 @@
-gas: 'n2o'
+gas: ''
+doi: ''
+
 output: ''
 nc: ''
 json: ''

@@ -29,7 +29,6 @@ from icoscp_obspack.utils import progress_bar, t2dt, get_prev_by_name, get_hash_
 
 # initialisation routine to set up global structures and initialise data
 def init():
-    global doi
     global atc_drought_header
     global atc_header
     global colnames
@@ -79,8 +78,7 @@ def init():
 
     nrcols = [22, 18, 20, 20]
     skip = [45, 39, 45, 45]
-    doi = 'XKKA-AWRS'
-    obspack_set = {'doi_collection': 'https://doi.org/10.18160/' + doi,
+    obspack_set = {'doi_collection': 'https://doi.org/10.18160/' + c.doi,
                    'icos_class': [1, 2],
                    'non-icos': True,
                    'version': '11.1',
@@ -224,10 +222,10 @@ def generate_plot(df, back, meas, mlo, meas_name: str = None, unit: str = None, 
     sns.set_style("white")
     df.plot(y='Trend', ax=ax1, color='black', label='Trend from '+station)
     if not back.empty:
+        back = back.set_index('datetime')
         back.plot(y='Trend', ax=ax1, color='yellow', linestyle="--", label='Global trend')
     mlo.plot(x='JulDate', y='Meas', ax=ax1, linewidth=0, color='red', marker='+', markersize=3,
              label='Global av.')
-    h1, l1 = ax1.get_legend_handles_labels()
     # Remove the top right second legend.
     ax1.get_legend().remove()
     plt.xticks(np.arange(x_lim[0], x_lim[1], step=1))
@@ -235,7 +233,7 @@ def generate_plot(df, back, meas, mlo, meas_name: str = None, unit: str = None, 
     df.SmoothCurve.plot(ax=ax1, fontsize=12, color='blue', label='Smoothed curve '+station)
     ax1.set_xlabel('Year', fontsize=14)
     ax1.grid(zorder=0, linestyle='-.', color='grey')
-    plt.legend(h1, l1, loc=2)
+    plt.legend(loc=2)
     plt.xlim(x_lim)
     plt.ylim(y_lim)
     if png_file is not None and c.do_png:
@@ -358,6 +356,7 @@ def cleanup_author_list(contribs: pd.DataFrame = None) -> pd.DataFrame:
 def get_file_meta() -> pd.DataFrame:
     info = pd.DataFrame()
     flist = get_file_list(get_specs())
+
     for pos, (_, file) in enumerate(flist.iterrows()):
         progress_bar(current=pos+1, total=len(flist))
         uri = file['dobj']
@@ -397,22 +396,18 @@ def get_specs() -> list[str]:
         specs = ['atcCo2Product', 'atcCo2L2DataObject',
                  'atcGHGFastTrackNRTDataObject',
                  'atcCo2NrtGrowingDataObject']
-        doi = '0HYS-FF7X'
     elif c.gas == 'ch4':
         # specs = ['atcCh4Product','atcCh4NrtGrowingDataObject']
         specs = ['atcCh4Product', 'atcCh4L2DataObject',
                  'atcGHGFastTrackNRTDataObject', 'atcCh4NrtGrowingDataObject']
-        doi = 'FE8D-2APZ'
     elif c.gas == 'n2o':
         # specs = ['atcCh4Product','atcCh4NrtGrowingDataObject']
         specs = ['atcN2oProduct', 'atcN2oL2DataObject',
                  'atcGHGFastTrackNRTDataObject', 'atcN2oNrtGrowingDataObject']
-        doi = 'XKKA-AWRS'
     elif c.gas == 'co':
         # specs = ['atcCh4Product','atcCh4NrtGrowingDataObject']
         specs = ['atcCoProduct', 'atcCoL2DataObject',
                  'atcGHGFastTrackNRTDataObject', 'atcCoNrtGrowingDataObject']
-        doi = '6ZXD-BAAZ'
     else:
         raise "Can't handle this gas yet!"
     return specs
@@ -529,12 +524,12 @@ def run_all(meta_info, process=False):
                         citations = def_citations + citations
                     # Station class 1 or 2; ICOS stations only.
                     if len(treat_data) > 0:
-                        print(st_id, ' Height:', h, ' Class:', st_class,
-                              ' NrFiles:', len(treat_data))
+                        pass
+                        # print(st_id, ' Height:', h, ' Class:', st_class,
+                        #       ' NrFiles:', len(treat_data))
                         if process:
-                            lab_nr = c.icos_stations[
-                                c.icos_stations.Hist == st_id
-                                ].NOAALabNr.values[0]
+                            lab_nr = c.icos_stations[c.icos_stations.Hist == st_id].NOAALabNr.values[0]
+                            c.file_contribs = pd.DataFrame()
                             if len(hgh) > 1:
                                 file_name = (
                                         c.gas + '_' + st_id.lower() +
@@ -551,13 +546,15 @@ def run_all(meta_info, process=False):
 
                             if not df.empty:
                                 c.file_contribs = cleanup_author_list(c.file_contribs)
-                                person = person_list()
+                                list_of_names = [f'{f} {l}' for f, l in zip(c.file_contribs['fname'],
+                                                                            c.file_contribs['lname'])]
+                                persons = ' AND '.join(list_of_names)
                                 try:
                                     write_nc(
                                         file_name, df, station_meta, citations,
-                                        obspack_set, persons=person, hgh=h,
+                                        obspack_set, persons=persons, hgh=h,
                                         calib_scale=calib, factor=fact,
-                                        nc_cnt=nr, doi_cite=doi
+                                        nc_cnt=nr, doi_cite=c.doi
                                     )
                                 except e:
                                     print('Error writing: ', file_name)
@@ -862,7 +859,7 @@ def analyse_station(
         print('No data found for station ' + st_id + ' ' + str(hgh))
     else:
         if c.do_png:
-            f_name = Path(c.png, f_name)
+            png_f_name = Path(c.png, f_name)
             try:
                 df = ghg_filter_ts(icos_df.JulDate, icos_df.Meas)
                 mau = pd.DataFrame()
@@ -888,7 +885,7 @@ def analyse_station(
                     exit(f'Unknown or not implemented gas: {c.gas}.\nAborting...')
 
                 generate_plot(df, back, icos_df, mau, meas_name=gas_name, unit=unit,
-                              station=f'{st_id} {str(hgh)}', png_file=f_name, x_lim=[2010, 2025.1],
+                              station=f'{st_id} {str(hgh)}', png_file=png_f_name, x_lim=[2010, 2025.2],
                               y_lim=limy)
             except (AttributeError, KeyError, TypeError, ValueError, FileNotFoundError, OSError, NameError,
                     IndexError) as plot_exception:
@@ -898,7 +895,6 @@ def analyse_station(
 
 def get_icos_ts(dobj_list: list = None, hgh: int = None,
                 download: bool = False):
-
     time_start_l2 = dt.datetime.now()
     time_end_l2 = dt.datetime.now()
 
@@ -947,16 +943,13 @@ def get_icos_ts(dobj_list: list = None, hgh: int = None,
             obs_data_df = do.getColumns()
             obs_data_df['Datetime'] = pd.to_datetime(obs_data_df['TIMESTAMP'])
             obs_data_df = obs_data_df.set_index('Datetime')
-
-        print(obs_data_df.Site.to_list()[0])
         # Check if dobj corresponds to NRT data product:
         if level == 1:
             # Filter dataframe by quality flag value:
-            obs_data_df.to_csv('zois.csv')
             if fast:
                 obs_data_df = obs_data_df[time_end_l2:]
             else:
-                if obs_data_df.Site.to_list()[0] == 'SVB':
+                if c.gas == 'n2o' and obs_data_df.Site.to_list()[0] in ['HTM', 'SVB']:
                     print(f'*******Passing', obs_data_df.Site.to_list()[0])
                 else:
                     obs_data_df = obs_data_df[time_end_fast:]
@@ -1062,8 +1055,15 @@ def get_icos_atm_product(dobj: Dobj = None, level: int = None):
             # print('Level: ', level)
             # print('Columns: ', colnames[level])
             # print('Cols : ', nrcols[level])
-        ret_df = pd.read_csv(source, comment='#', header=None,
-                             names=colnames[level], delimiter=';',
+        # Todo: To prevent pandas from guessing column types, pass these
+        #  dtypes to the next read_csv(dtype=dtypes) call.
+        # dtypes = {"Site": "object",  "SamplingHeight": "int64", "Year": "int64", "Month": "int64",
+        #           "Day": "int64", "Hour": "int64", "Minute": "int64", "DecimalDate": "float64",
+        #           "co2": "float64", "Stdev": "float64", "NbPoints": "int64", "Flag": "object",
+        #           "InstrumentId": "int64", "QualityId": "int64", "LTR": "float64", "CMR": "float64",
+        #           "STTB": "float64", "QcBias": "float64", "QcBiasUncertainty": "float64", "Origin": "object",
+        #           "OriginalFlag": "object"}
+        ret_df = pd.read_csv(source, comment='#', header=None, names=colnames[level], delimiter=';',
                              usecols=range(0, nrcols[level] - 1))
         return ret_df
 
@@ -1082,7 +1082,7 @@ def get_icos_atm_product(dobj: Dobj = None, level: int = None):
         # print('filled cache with ', f_name)
     else:
         pass
-        print('hit cache for ', f_name)
+        # print('hit cache for ', f_name)
     if f_name.suffix == '.zip':
         zf = zipfile.ZipFile(f_name, 'r')
         for item in zf.namelist():
@@ -1121,20 +1121,9 @@ def get_icos_atm_product(dobj: Dobj = None, level: int = None):
     return df
 
 
-def person_list():
-    name_list = ''
-    first = True
-    for i, p in c.col_contribs.iterrows():
-        if not first:
-            name_list = name_list + ' AND '
-        first = False
-        name_list = name_list + p.fname + ' ' + p.lname
-    return name_list
-
-
 def write_nc(f_name, df, station, citations, settings, persons='', hgh=150,
              factor=1e6, calib_scale='WMO CO2 X2019', lab_id=466, nc_cnt=0,
-             doi_cite='PEKQ-M4T1'):
+             doi_cite: str | None = None):
     """Write measurements' data as ObsPack NetCDF file."""
 
     global cntAll
@@ -1338,7 +1327,7 @@ def write_nc(f_name, df, station, citations, settings, persons='', hgh=150,
     # fill the attributes, most value are default and copied from Obspack V7 2021 and some need to be replaced
     # with actual info before writing to netcdf
     obspack_name = 'obspack_' + c.gas + '_' + str(
-        lab_id) + '_GV_ICOSFT2025.1_' + dt.datetime.now().strftime('%Y%m%d')
+        lab_id) + '_GV_ICOSFT2025.2_' + dt.datetime.now().strftime('%Y%m%d')
 
     s = c.icos_stations[c.icos_stations.Hist == station.id]
     lab_id = s.NOAALabNr.values[0]
