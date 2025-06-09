@@ -4,7 +4,7 @@ import hashlib
 import json
 import sys
 import time
-from datetime import date
+from datetime import date, datetime
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Any
@@ -35,35 +35,32 @@ def progress_bar(current: int, total: int, bar_length: int = 20) -> None:
         sys.stdout.write(f' {i.ICON_CHECK}\n')
 
 
-def t2dt(atime: float) -> dt.datetime:
+def t2dt(timepoint: float) -> dt.datetime:
     """Convert a fractional year timestamp to a datetime object."""
-    year = int(atime)
-    remainder = atime - year
+    year = int(timepoint)
+    remainder = timepoint - year
     boy = dt.datetime(year, 1, 1)
     eoy = dt.datetime(year + 1, 1, 1)
     seconds = remainder * (eoy - boy).total_seconds()
     return boy + dt.timedelta(seconds=seconds)
 
 
+def sinceEpoch(date: date | datetime) -> float:
+    """Returns seconds since epoch"""
+    return time.mktime(date.timetuple())
+
+
 def toYearFraction(date: date) -> float:
-
-    def sinceEpoch(date): # returns seconds since epoch
-        return time.mktime(date.timetuple())
-    s = sinceEpoch
-
     year = date.year
     startOfThisYear = dt.datetime(year=year, month=1, day=1)
     startOfNextYear = dt.datetime(year=year+1, month=1, day=1)
-
-    yearElapsed = s(date) - s(startOfThisYear)
-    yearDuration = s(startOfNextYear) - s(startOfThisYear)
+    yearElapsed = sinceEpoch(date) - sinceEpoch(startOfThisYear)
+    yearDuration = sinceEpoch(startOfNextYear) - sinceEpoch(startOfThisYear)
     fraction = yearElapsed/yearDuration
-
     return date.year + fraction
 
 
-def write_json(path: str, content: dict[str, Any], convert_posix: bool = True
-               ) -> None:
+def write_json(path: str, content: dict[str, Any], convert_posix: bool = True) -> None:
     """Write dictionary to json file."""
     if convert_posix:
         posix_to_str(content)
@@ -74,7 +71,6 @@ def write_json(path: str, content: dict[str, Any], convert_posix: bool = True
 def read_json(path: str) -> Any:
     """Read dictionary from json file."""
     with open(file=path) as json_handle:
-
         json_data = json.load(json_handle)
     str_to_posix(json_data)
     return json_data

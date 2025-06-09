@@ -15,13 +15,9 @@ import xarray as xr
 from icoscp_obspack.config import Config
 from icoscp_obspack.utils.utils import doi_citation, get_hash_sum, get_prev_by_name
 
-def write_nc(c, f_name, df, station, citations, settings, persons='', hgh=150,
-             factor=1e6, calib_scale='WMO CO2 X2019', lab_id=466, nc_cnt=0,
-             doi_cite='PEKQ-M4T1'):
+def write_nc(c, f_name, df, station, citations, settings, persons, hgh,
+             lab_id, nc_cnt, doi_cite):
     """Write measurements' data as ObsPack NetCDF file."""
-
-    # for testing purposes you can truncate a data file to max 100 rows
-    # df = df[:99]
 
     dlen = len(df.index)
     nc_name = Path(c.nc, f'{f_name}.nc')
@@ -92,7 +88,7 @@ def write_nc(c, f_name, df, station, citations, settings, persons='', hgh=150,
     value.standard_name = 'mole_fraction_of_' + c.gas + '_in_dry_air'
     value.units = 'mol mol-1'
     value.comment = 'mole per mole of dry air'
-    value.scale_comment = calib_scale
+    value.scale_comment = c.calibration_scale
 
     nvalue = ds.createVariable('nvalue', 'i', ('time',), fill_value=-9,
                                zlib=True)
@@ -281,8 +277,8 @@ def write_nc(c, f_name, df, station, citations, settings, persons='', hgh=150,
         dff.loc[(dff[col] < 0), col] = np.nan
         return dff[col]
 
-    value[:] = scaleAndMask(df, 'Meas', factor)
-    value_std_dev[:] = scaleAndMask(df, 'Stdev', factor)
+    value[:] = scaleAndMask(df, 'Meas', c.conversion_factor)
+    value_std_dev[:] = scaleAndMask(df, 'Stdev', c.conversion_factor)
     nvalue[:] = df.NbPoints
     latitude[:] = station.location.lat
     longitude[:] = station.location.lon
@@ -291,9 +287,9 @@ def write_nc(c, f_name, df, station, citations, settings, persons='', hgh=150,
     qc_flag[:] = df.Flag
     icos_datalevel[:] = df.Level
     try:
-        icos_LTR[:] = scaleAndMask(df, 'LTR', factor)
-        icos_CMR[:] = scaleAndMask(df, 'CMR', factor)
-        icos_STTB[:] = scaleAndMask(df, 'STTB', factor)
+        icos_LTR[:] = scaleAndMask(df, 'LTR', c.conversion_factor)
+        icos_CMR[:] = scaleAndMask(df, 'CMR', c.conversion_factor)
+        icos_STTB[:] = scaleAndMask(df, 'STTB', c.conversion_factor)
     except:
         icos_LTR[:] = np.nan
         icos_CMR[:] = np.nan
@@ -362,7 +358,7 @@ def write_nc(c, f_name, df, station, citations, settings, persons='', hgh=150,
                                'provided by the ICOS program. The valid data selection scheme for ICOS datasets may differ ' \
                                'significantly from the selection scheme provided previously by contributing laboratories.)',
             'dataset_contains_ICOS_L1_and_or_L2_data': isICOS,
-            'dataset_calibration_scale': calib_scale,
+            'dataset_calibration_scale': c.calibration_scale,
             'dataset_start_date': timeseries_start,
             'dataset_stop_date': timeseries_end,
             'dataset_data_frequency': 1.,
@@ -455,15 +451,15 @@ def write_nc(c, f_name, df, station, citations, settings, persons='', hgh=150,
         csv_data['second'] = [dt.datetime.utcfromtimestamp(i).second for i in tim]
         csv_data['time'] = tim
         csv_data['time_decimal'] = timdec
-        csv_data['value'] = scaleAndMask(df, 'Meas', 1 / factor).values
-        csv_data['value_std_dev'] = scaleAndMask(df, 'Stdev', 1 / factor).values
+        csv_data['value'] = scaleAndMask(df, 'Meas', 1 / c.conversion_factor).values
+        csv_data['value_std_dev'] = scaleAndMask(df, 'Stdev', 1 / c.conversion_factor).values
         csv_data['nvalue'] = df.NbPoints.values
         csv_data['qc_flag'] = df.Flag.values
         csv_data['icos_datalevel'] = df.Level.values
         try:
-            csv_data['icos_LTR'] = scaleAndMask(df, 'LTR', 1 / factor).values
-            csv_data['icos_CMR'] = scaleAndMask(df, 'CMR', 1 / factor).values
-            csv_data['icos_STTB'] = scaleAndMask(df, 'STTB', 1 / factor).values
+            csv_data['icos_LTR'] = scaleAndMask(df, 'LTR', 1 / c.conversion_factor).values
+            csv_data['icos_CMR'] = scaleAndMask(df, 'CMR', 1 / c.conversion_factor).values
+            csv_data['icos_STTB'] = scaleAndMask(df, 'STTB', 1 / c.conversion_factor).values
         except (
                 KeyError, AttributeError, TypeError, ValueError, ZeroDivisionError, NameError
         ) as column_exception:
@@ -501,7 +497,7 @@ def write_nc(c, f_name, df, station, citations, settings, persons='', hgh=150,
     if c.gas == 'n2o':
         spec_url = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackN2oTimeSeriesResult'
 
-    res = generate_meta(config=c, f_name=nc_name, obj_spec=spec_url, input_doi=f'10.18160/{doi_cite}', scale=calib_scale)
+    res = generate_meta(config=c, f_name=nc_name, obj_spec=spec_url, input_doi=f'10.18160/{doi_cite}', scale=c.calibration_scale)
     pretty = json.dumps(res, indent=2)
     json_f_name = Path(c.json, f'{nc_name.stem}.json')
     with open(json_f_name, 'w') as f:

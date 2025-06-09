@@ -48,6 +48,9 @@ class Config:
         with open(YAML_CONFIG) as yaml_handler:
             config = YamlConfig(**yaml.safe_load(yaml_handler))
 
+        if config.gas not in ['co2', 'ch4', 'n2o', 'co']:
+            exit(f"Invalid gas: {config.gas}.\nPossible values are 'co2', 'ch4', 'n2o', 'co'.\nAborting...")
+
         if config.debug:
             print(f'Running obspack for gas: "{config.gas}" in debug mode...')
             print('-------------')
@@ -88,6 +91,21 @@ class Config:
         self.file_contribs = pd.DataFrame()
         self.col_contribs = pd.DataFrame()
 
+        self.conversion_factor: float
+        self.calibration_scale: str
+        if config.gas == 'co2':
+            self.conversion_factor = 1e6
+            self.calibration_scale = 'WMO CO2 X2019'
+        elif config.gas == 'ch4':
+            self.conversion_factor = 1e9
+            self.calibration_scale = 'WMO X2004A'
+        elif config.gas == 'n2o':
+            self.conversion_factor = 1e9
+            self.calibration_scale = 'NOAA-2006A'
+        elif config.gas == 'co':
+            self.conversion_factor = 1e6
+            self.calibration_scale = 'WMO X2014A'
+
 
     def _init_path(
             self, default_path: Path, user_specified_path: Optional[str],
@@ -97,6 +115,7 @@ class Config:
         path = default_path if user_specified_path is None else Path(user_specified_path)
         if path_type == "dir":
             path.mkdir(parents=True, exist_ok=True)
+            print(f"Created directory '{path}'")
         return path
 
 

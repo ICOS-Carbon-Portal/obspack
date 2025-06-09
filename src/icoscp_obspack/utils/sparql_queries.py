@@ -1,7 +1,7 @@
 from datetime import datetime
 
 
-def dobjs_from_spec_list(specs: list[str], submitted_after: datetime) -> str:
+def dobjs_from_station_and_spec_list(specs: list[str], station_id: str, submitted_after: datetime) -> str:
     return f"""prefix cpmeta: <http://meta.icos-cp.eu/ontologies/cpmeta/>
 prefix prov: <http://www.w3.org/ns/prov#>
 prefix xsd: <http://www.w3.org/2001/XMLSchema#>
@@ -9,14 +9,15 @@ select ?dobj
 where {{
     VALUES ?spec {{{"> <".join(specs)}}}
     ?dobj cpmeta:hasObjectSpec ?spec .
-    BIND(EXISTS{{[] cpmeta:isNextVersionOf ?dobj}} AS ?hasNextVersion)
+    ?dobj cpmeta:wasAcquiredBy/prov:wasAssociatedWith/cpmeta:hasStationId ?stationId .
     ?dobj cpmeta:hasSizeInBytes ?size .
     ?dobj cpmeta:hasName ?fileName .
     ?dobj cpmeta:wasSubmittedBy/prov:endedAtTime ?submTime .
     ?dobj cpmeta:hasStartTime | (cpmeta:wasAcquiredBy / prov:startedAtTime) ?timeStart .
     ?dobj cpmeta:hasEndTime | (cpmeta:wasAcquiredBy / prov:endedAtTime) ?timeEnd .
     FILTER NOT EXISTS {{[] cpmeta:isNextVersionOf ?dobj}}
-    FILTER( ?submTime >= {submitted_after.isoformat(timespec='milliseconds')}'Z'^^xsd:dateTime )
+    FILTER( ?stationId == '{station_id}' )
+    FILTER( ?submTime >= '{submitted_after.isoformat(timespec='milliseconds')}Z'^^xsd:dateTime )
 }}
 order by desc(?submTime)
 """
