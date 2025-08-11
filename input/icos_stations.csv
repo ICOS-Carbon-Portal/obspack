@@ -35,7 +35,7 @@ nr;Hist;GAW_ICOS_contrib;ICOS_L12;OSCAR_ID;NOAALabNr;NOAA_Lab_name;Long_name;Cou
 32;MLH;;;0-20008-0-MLH;468;LATMOS - (IPSL/CNRS/UVSQ/UPMC);Magny-les-Hameaux;France;1;LATMOS - (IPSL/CNRS/UVSQ/UPMC);
 33;NOR;x;NOR;0-20008-0-NOR;424;Lund University - Centre for Environmental and Climate Research;Norunda;Sweden;1;Lund University, INES;http://icos-sweden.se/station_norunda.html
 34;OHP;;;0-20008-0-OHP;468;LATMOS - (IPSL/CNRS/UVSQ/UPMC);Observatoire Haute Provence;France;1;LATMOS - (IPSL/CNRS/UVSQ/UPMC);http://www.obs-hp.fr/www/geo/geo_ohp.html
-35;OPE;;OPE;;469;Agence nationale pour la gestion des déchets radioactifs;Observatoire pérenne de l'environnement;France;1;Agence nationale pour la gestion des déchets radioactifs;
+35;OPE;;OPE;0-250-0-OPE;469;Agence nationale pour la gestion des déchets radioactifs;Observatoire pérenne de l'environnement;France;1;Agence nationale pour la gestion des déchets radioactifs;
 36;OXK;x;OXK;0-20008-0-OXK;45;Max Planck Institute for Biogeochemistry;Ochsenkopf;Germany;1;Max Planck Institute for Biogeochemistry;https://www.bgc-jena.mpg.de/bgc-systems/pmwiki2/pmwiki.php/TAG/Ochsenkopf
 37;PAL;x;PAL;0-20008-0-PAL;30;Finnish Meteorological Institute;Pallas;Finland;2;Finnish Meteorological Institute;https://en.ilmatieteenlaitos.fi/pallas-atmosphere-ecosystem-supersite
 38;PDM;;PDM;0-20008-0-PDM;11;Plateforme Pyrénéenne d'Observation Atmosphérique;Pic du Midi;France;1;Observatoire Midi-Pyrenees;http://p2oa.aero.obs-mip.fr
@@ -61,7 +61,7 @@ nr;Hist;GAW_ICOS_contrib;ICOS_L12;OSCAR_ID;NOAALabNr;NOAA_Lab_name;Long_name;Cou
 59;ZSF;x;ZSF;0-20008-0-ZSF;25;Umweltbundesamt;Zugspitze-Schneefernerhaus;Germany;1;Umweltbundesamt;www.schneefernerhaus.de
 60;CRA;;;;473;Centre d'Aerologie;Centre de Recherches Atmosphériques;France;1;;
 61;ROC;;;;11;Laboratoire des Sciences du Climat et de l'Environnement;Roc'h Trédudon;France;1;;
-62;SNO;;;;474;Aarhus University;Station Nord;Denmark;1;;
+62;SNO;;;0-20008-0-SNO;474;Aarhus University;Station Nord;Denmark;1;;
 63;ZUG;;ZUG;0-20008-0-ZUG;25;Umweltbundesamt;Zugspitze;Germany;1;Umweltbundesamt;
 64;JAR;;;;475;Estonian University of Life Sciences, Institute of Forestry and Engineering;Järvselja;Estonia;2;Estonian University of Life Sciences, Institute of Forestry and Engineering;https://mi.emu.ee/en/
 65;SGC;;;;431;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;Sierra de Grazalema;Spain;1;Institut de Ciencia i Tecnologia Ambientals, Universitat Autonoma de Barcelona;https://portalrecerca.uab.cat/en

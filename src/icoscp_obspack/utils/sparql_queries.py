@@ -2,12 +2,13 @@ from datetime import datetime
 
 
 def dobjs_from_station_and_spec_list(specs: list[str], station_id: str, submitted_after: datetime) -> str:
+    specs_str: str = f"<{'> <'.join(specs)}>" if len(specs) > 0 else ''
     return f"""prefix cpmeta: <http://meta.icos-cp.eu/ontologies/cpmeta/>
 prefix prov: <http://www.w3.org/ns/prov#>
 prefix xsd: <http://www.w3.org/2001/XMLSchema#>
 select ?dobj
 where {{
-    VALUES ?spec {{{"> <".join(specs)}}}
+    VALUES ?spec {{{specs_str}}}
     ?dobj cpmeta:hasObjectSpec ?spec .
     ?dobj cpmeta:wasAcquiredBy/prov:wasAssociatedWith/cpmeta:hasStationId ?stationId .
     ?dobj cpmeta:hasSizeInBytes ?size .

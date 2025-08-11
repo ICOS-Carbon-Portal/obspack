@@ -1,13 +1,40 @@
 # Standard library imports.
+from dataclasses import dataclass
 from typing import Optional
 
 # Related third party imports.
-import pandas as pd
+import requests
+from requests.structures import CaseInsensitiveDict
 
-# Local application/library specific imports.
-from icoscp_obspack.config import Config
+@dataclass(frozen=True)
+class Contributor:
+    uri: str
+    first_name: str
+    last_name: str
+    orcid: str | None
+    weight: int | None
+    start: str | None
+    end: str | None
 
-def citation(config: Config, as_contrib: bool = False) -> str:
+@dataclass(frozen=True)
+class ContributorWithWeight(Contributor):
+    weight: int
+    @classmethod
+    def from_contributor(
+        cls, contributor: Contributor, default_weight: int = 0, imposed_weight: int | None = None) \
+    -> 'ContributorWithWeight':
+        return ContributorWithWeight(
+            uri=contributor.uri,
+            first_name=contributor.first_name,
+            last_name=contributor.last_name,
+            orcid=contributor.orcid,
+            weight=imposed_weight or contributor.weight or default_weight,
+            start=contributor.start,
+            end=contributor.end
+        )
+
+
+def citation(contributors: list[ContributorWithWeight], as_contrib: bool = False) -> str:
     """Return the formatted citation json."""
     data_col = 'DataCollector' if as_contrib else ''
     data_cur = 'DataCurator' if as_contrib else ''
@@ -16,12 +43,13 @@ def citation(config: Config, as_contrib: bool = False) -> str:
     s = '"contributors": [' if as_contrib else '"creators": ['
 
     s = s + _inst_dcite_json('ICOS RI', data_dist)
-    for i, person in config.col_contribs.iterrows():
-        if person['weight'] > 0:
-            p_json = _p_dcite_json(first_name=person['fname'],
-                                  last_name=person['lname'],
-                                  orcid=person['orcid'],
-                                  contrib_type=data_col)
+    for contributor in contributors:
+        if contributor.weight > 0:
+            p_json = _p_dcite_json(
+                first_name=contributor.first_name,
+                last_name=contributor.last_name,
+                orcid=contributor.orcid,
+                contrib_type=data_col)
             s = s + ',' + p_json
     s = s + ',' + _inst_dcite_json('ICOS Carbon Portal', data_cur)
     s = s + ',' + _inst_dcite_json('ICOS Atmosphere Thematic Centre', data_man)
@@ -45,9 +73,9 @@ def _inst_dcite_json(name: str, contrib_type: Optional[str] = None) -> str:
     return s
 
 
-def _p_dcite_json(first_name: str, last_name: str,
-                 orcid: Optional[str] = None, affiliation: Optional[str] = None,
-                 contrib_type: Optional[str] = None) -> str:
+def _p_dcite_json(
+        first_name: str, last_name: str, orcid: Optional[str] = None,
+        affiliation: Optional[str] = None, contrib_type: Optional[str] = None) -> str:
     """Return the formatted person datacite json."""
     s = ('  {\n  "name" : {\n    "familyName" : "' + last_name + '",\n' +
          '    "givenName" : "' + first_name + '",\n' +
@@ -69,11 +97,13 @@ def _p_dcite_json(first_name: str, last_name: str,
     return s
 
 
-def cleanup_author_list(contribs: pd.DataFrame) -> pd.DataFrame:
-    """Drop duplicates in the author list."""
-    contribs = contribs.sort_values('lname', ascending=False).\
-        drop_duplicates(subset=['fname', 'lname'])
-    contribs.loc[contribs['weight'].isnull(), 'weight'] = 0
-    contribs['wght'] = 100 - contribs.weight.astype(int)
-    contribs = contribs.sort_values(by=['wght', 'lname'], ascending=True)
-    return contribs
+def doi_citation(doi: str, citation_style: str = 'elsevier-harvard') -> str:
+    url = f'https://doi.org/{doi}'
+    headers: CaseInsensitiveDict[str] = CaseInsensitiveDict()
+    headers['Accept'] = f'text/x-bibliography; style={citation_style}'
+    resp = requests.get(url, headers=headers)
+    if resp.ok:
+        return resp.text
+    else:
+        print(f'Citation not found for DOI {url}.')
+        return 'citation not found'

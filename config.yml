@@ -1,17 +1,22 @@
-gas: ''
-doi: ''
-submitted_after: '2023-01-01'
-input: 'input'
-output: 'output'
+gas: 'ch4'
+doi: '10.18160/46A2-7ABA'
+dois_for_default_citations:
+  - '10.18160/0F1E-DKXT'
+  - '10.18160/ATM_NRT_CO2_CH4'
+input: '../input'
+output: '../output'
+obspack_product_name: 'GVeu'
+obspack_product_version: 'V11'
 nc:
 json:
 txt:
 png:
 pickle:
 zip:
+use_cached_datafiles: true
 analyse: true
-plot: false
 do_png: true
+display_plots: false
 do_txt: true
 debug: false
 refresh_pickles: true
@@ -20,3 +25,5 @@ use_flags: True
 lab_numbers:
 icos_stations:
 header:
+default_contributor_weight:
+print_timing_messages: false
