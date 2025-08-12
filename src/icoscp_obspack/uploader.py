@@ -9,9 +9,6 @@ import pandas as pd
 import requests
 from icoscp_core.icos import auth
 
-# Local application/library-specific imports.
-from icoscp_obspack.constants import icons
-
 def main():
     gas = ''
     while gas not in ['co2', 'ch4', 'n2o']:
@@ -46,7 +43,7 @@ def main():
             data=open(file=data_file_path, mode='rb')
         )
         if upload_data_resp.status_code == HTTPStatus.OK:
-            print(landing_page, icons.ICON_CHECK)
+            print(landing_page, '\u2713')
         else:
             # Todo: correctly try-except the http request.
             print(upload_data_resp.text)

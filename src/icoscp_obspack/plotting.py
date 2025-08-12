@@ -5,15 +5,15 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-from datetime import datetime, timedelta
+from datetime import datetime
 from matplotlib.lines import Line2D
 from numpy.typing import ArrayLike
 from urllib.error import HTTPError, URLError
 
 # Local application/library specific imports.
+from icoscp_obspack.ccgfilt import ccgFilter
 from icoscp_obspack.config import Config
-from icoscp_obspack.utils import ccgfilt
-from icoscp_obspack.utils.utils import timeit
+from icoscp_obspack.utils import timeit, t2dt
 
 
 def plot_timeseries_station(
@@ -29,15 +29,15 @@ def plot_timeseries_station(
     path_to_png = Path(config.png, filename)
     # Make a copy of the dataset without timezone information in the index.
     # This is necessary for the ghg_filter_ts function to work correctly.
-    dataset_wo_tz = dataset.copy()
-    dataset_wo_tz.index = dataset_wo_tz.index.tz_localize(None)
+    dataset_no_tz = dataset.copy()
+    dataset_no_tz.index = dataset_no_tz.index.tz_localize(None)
     time0 = datetime.now()
-    dataset_filtered = ghg_filter_ts(dataset_wo_tz['JulDate'], dataset_wo_tz['Meas'])
+    dataset_filtered = ghg_filter_ts(dataset_no_tz['JulDate'], dataset_no_tz['Meas'])
     _ = timeit(time0, f'    Filter timeseries for station {station_id} at sampling height {sampling_height}', config.print_timing_messages)
     station_and_height = f'{station_id} {str(int(sampling_height))}'
     last_time = dataset['JulDate'].to_numpy()[-1]
     fig = plt.figure(figsize=(15, 8))
-    ax = fig.add_axes(rect=[0.125, 0.115, 0.775, 0.775])
+    ax = fig.add_axes(rect=(0.125, 0.115, 0.775, 0.775))
     ax.set_title(
         f'{config.plot_gas_label} at {station_and_height}; measurements, trend and seasonal signal',
         fontsize=18)
@@ -127,16 +127,6 @@ def get_global_average(c: Config) -> pd.DataFrame:
     return global_avg
 
 
-def t2dt(timepoint: float) -> datetime:
-    """Convert a fractional year timestamp to a datetime object."""
-    year = int(timepoint)
-    remainder = timepoint - year
-    boy = datetime(year, 1, 1)
-    eoy = datetime(year + 1, 1, 1)
-    seconds = remainder * (eoy - boy).total_seconds()
-    return boy + timedelta(seconds=seconds)
-
-
 def ghg_filter_ts(
         time: ArrayLike, meas: ArrayLike, shortTerm: int = 80, longTerm: int = 667, numPolyterms: int = 3,
         numHarmonics: int = 4, timeZero: int = 2010, sampleInterval: float = 1/24) -> pd.DataFrame:
@@ -160,8 +150,8 @@ def ghg_filter_ts(
 
     gap = 0
     debug = True
-    filt = ccgfilt.ccgFilter(time, meas, shortTerm, longTerm, sampleInterval,
-                             numPolyterms, numHarmonics, timeZero, gap, debug)
+    filt = ccgFilter(
+        time, meas, shortTerm, longTerm, sampleInterval, numPolyterms, numHarmonics, timeZero, gap, debug)
 
     # Get x,y data for plotting
     x0 = filt.xinterp
@@ -187,7 +177,8 @@ def ghg_filter_ts(
     resid_from_smooth = filt.yp - filt.getSmoothValue(meas.index)
     deriv = filt.deriv
 
-    return pd.DataFrame({'GrowthRate': deriv, 'Function': y1, 'Poly': y2,
-                         'SmoothCurve': y3, 'Trend': y4, 'Cycle': smooth_cycle,
-                         'Residual': resid_trend, 'Detrended': y5},
-                        index=pd.Index(x0, name='datetime'))
+    return pd.DataFrame(
+        {
+            'GrowthRate': deriv, 'Function': y1, 'Poly': y2, 'SmoothCurve': y3, 'Trend': y4,
+            'Cycle': smooth_cycle, 'Residual': resid_trend, 'Detrended': y5},
+        index=pd.Index(x0, name='datetime'))

@@ -7,7 +7,7 @@ from typing import Literal, Optional
 import yaml
 
 # Local application/library specific imports.
-from icoscp_obspack.utils.citation import doi_citation
+from icoscp_obspack.citation import doi_citation
 
 YAML_CONFIG = '../config.yml'
 

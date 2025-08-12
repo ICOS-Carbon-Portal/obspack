@@ -14,11 +14,11 @@ from icoscp_core.rolemeta import Membership
 from pandas._typing import DtypeArg
 
 # Local application/library specific imports.
+from icoscp_obspack.citation import Contributor, ContributorWithWeight, citation
 from icoscp_obspack.config import Config
-from icoscp_obspack.utils.netcdf import DataWriter, StationExtraInfo, NetcdfFileInfoForUploader
-from icoscp_obspack.utils.citation import Contributor, ContributorWithWeight, citation
-from icoscp_obspack.utils.plotting import get_global_average, ghg_filter_ts, plot_timeseries_station
-from icoscp_obspack.utils.utils import timeit
+from icoscp_obspack.data_writer import DataWriter, StationExtraInfo, NetcdfFileInfoForUploader
+from icoscp_obspack.plotting import get_global_average, ghg_filter_ts, plot_timeseries_station
+from icoscp_obspack.utils import timeit
 
 c = Config()
 
@@ -62,7 +62,8 @@ first_dataset_id = {'co2': 1000, 'ch4': 2000, 'n2o': 3000, 'co': 4000}
 # Hard-coded dataset IDs for cases where the sorting of data objects is not the same as in previous
 # Obspack versions. It would be better to store the correspondance between dataset IDs and station +
 # sampling height in a separate file rather than relying on the sorting of the stations and sampling heights.
-specific_dataset_ids: dict[str, dict[float, int]] = {'SSL': {12: 2074, 35: 2073}}
+specific_dataset_ids: dict[str, dict[float, int]] = {
+    'SSL': {12: first_dataset_id[c.gas] + 74, 35: first_dataset_id[c.gas] + 73}}
 
 # Additional contributors for specific stations.
 additional_contributors: dict[str, list[Contributor]] = {
@@ -387,42 +388,6 @@ def clean_and_sort_contributors(contributors: list[Contributor]) -> list[Contrib
     contributors_cleaned.sort(key=lambda contributor: (-contributor.weight, contributor.last_name))
     return contributors_cleaned
 
-        #first_names = [contrib.first_name for contrib in contributors_with_same_uri]
-        #last_names = [contrib.last_name for contrib in contributors_with_same_uri]
-        #orcids = [contrib.orcid for contrib in contributors_with_same_uri if contrib.orcid is not None]
-        #weights = [contrib.weight for contrib in contributors_with_same_uri]
-        #non_none_weights = [weight for weight in weights if weight is not None]
-        #start_dates = [contrib.start for contrib in contributors_with_same_uri if contrib.start is not None]
-        #end_dates = [contrib.end for contrib in contributors_with_same_uri if contrib.end is not None]
-        #if len(set(first_names)) > 1 or len(set(last_names)) > 1 or len(set(orcids)) > 1:
-        #    print(
-        #        f'\tFound multiple contributors with the same URI "{uri}" but different names or'
-        #        f' ORCIDs. Using "{first_names[0]} {last_names[0]} ({orcids[0]})".')
-        #if all([weight is None for weight in weights]):
-        #    print(f'\tNo weight found for contributor with URI "{uri}". Assigning weight {c.default_contributor_weight}.')
-        #    weight = c.default_contributor_weight
-        #    ind = 0
-        #else:
-        #    if len(non_none_weights) > 1:
-        #        weight = min(non_none_weights)
-        #        print(
-        #            f'\tFound multiple weights for contributor with URI "{uri}": {non_none_weights}.'
-        #            f' Using the minimum weight: {weight}.')
-        #    else:
-        #        weight = non_none_weights[0]
-        #    ind = weights.index(weight)
-        #start = contributors_with_same_uri[ind].start
-        #end = contributors_with_same_uri[ind].end
-        #contributors_cleaned.append(Contributor(
-        #    uri=uri,
-        #    first_name=first_names[0],
-        #    last_name=last_names[0],
-        #    orcid=orcids[0],
-        #    weight=weight,
-        #    start=start,
-        #    end=end
-        #))
-
 def combine_data_files(
         dobjs: list[DataObject], station_id: str, sampling_height: float
         ) -> tuple[pd.DataFrame, list[DataObject]]:
@@ -447,11 +412,6 @@ def combine_data_files(
         #    print(f'Skipping data object with hashsum {dobj.hash} at station {station_id}.')
         for data_type in ['historic', 'L2', 'fasttrack', 'nrt']:
             if dobj.specification.self.uri == specs_per_gas[c.gas][data_type]:
-                #dataset: ArraysDict = data.get_columns_as_arrays(dobj)
-                #dataset['Datetime'] = np.array(list(map(lambda t: datetime.strptime(t, '%Y-%m-%dT%H:%M:%S.sss'), dataset.pop('TIMESTAMP'))))
-                #dataset['JulDate'] = np.array(list(map(lambda t: toYearFraction(t), dataset['Datetime'])))
-                #dataset['Meas'] = dataset.pop(c.gas)
-                #dataset['Level'] = np.ones(len(dataset['Datetime']))*data_level_per_data_type[data_type]
                 dataset: pd.DataFrame = get_dataset(dobj)
                 dataset = dataset.rename({'DecimalDate': 'JulDate', c.gas: 'Meas'}, axis=1)
                 dataset['Datetime'] = dataset.apply(
@@ -618,47 +578,3 @@ def _prompt_for_float_value(info_text: str) -> float:
 
 if __name__ == '__main__':
     main()
-
-
-
-
-#obspack_set = {
-#    'doi_collection': 'https://doi.org/10.18160/' + c.doi,
-#    'icos_class': [1, 2],
-#    'non-icos': True,
-#    'version': '11.1',
-#    'contributors': [],
-#    'contrib_ORCID': [],
-#    'other': 'NA'
-#    }
-
-
-#def get_meta_dobjs(dobjs: list[str]) -> list[DataObject]:
-#    metadata_dobjs: list[DataObject] = []
-#    for pos, dobj_uri in enumerate(dobjs):
-#        progress_bar(current=pos+1, total=len(dobjs))
-#        dobj_meta = meta.get_dobj_meta(dobj_uri)
-#        if (
-#            isinstance(dobj_meta.specificInfo, StationTimeSeriesMeta)
-#            and isinstance(dobj_meta.specificInfo.columns, VarMeta)
-#            and c.gas in [col.label for col in dobj_meta.specificInfo.columns]
-#        ):
-#            metadata_dobjs.append(dobj_meta)
-#    return metadata_dobjs
-
-
-#def get_list_of_dobjs_from_station_and_list_of_specs(specs: list[str], station_id: str) -> list[str]:
-#    """Query atmospheric data.
-#
-#    Create and execute a sparql query to retrieve atmospheric data that
-#    we need to explore.
-#    """
-#    sparql_query = dobjs_from_station_and_spec_list(
-#        [envri.ICOS_CONFIG.meta_resources_prefix + spec for spec in specs],
-#        station_id,
-#        c.submitted_after)
-#    response = requests.get(
-#        envri.ICOS_CONFIG.sparql, params={'format': 'json', 'query': sparql_query})
-#    dobjs_json = response.json()
-#    dobjs = [binding.get('dobj', {}).get('value') for binding in dobjs_json['results']['bindings']]
-#    return dobjs
