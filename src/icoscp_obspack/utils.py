@@ -14,7 +14,7 @@ def timeit(previous_time: datetime, message: str, print_msg: bool) -> datetime:
     :param `message`:
         A message to print along with the elapsed time.
     """
-    current_time = datetime.now()
+    current_time = datetime.now(tz=timezone.utc)
     elapsed_time = current_time - previous_time
     message_elapsed_time = f"{elapsed_time.total_seconds():6.2f} seconds"
     if print_msg:
@@ -29,7 +29,7 @@ def get_hash_sum(path: Path) -> str:
         data = f_hdl.read()
     return hashlib.sha256(data).hexdigest()
 
-def year_fraction(date_and_time: pd.Timestamp):
+def year_fraction(date_and_time: pd.Timestamp | datetime):
     start = datetime(date_and_time.year, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     end = datetime(date_and_time.year + 1, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     year_fraction = (date_and_time - start) / (end - start)

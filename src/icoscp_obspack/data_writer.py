@@ -15,7 +15,7 @@ from icoscp_core.metacore import Station
 from icoscp_core.sparql import SparqlResults, BoundUri
 
 # Local application/library specific imports.
-from icoscp_obspack.citation import Contributor
+from icoscp_obspack.citation import ContributorWithWeight
 from icoscp_obspack.config import Config
 from icoscp_obspack.utils import timeit, get_hash_sum, year_fraction, extract_temporal_components
 
@@ -43,9 +43,10 @@ class DataWriter:
     def __init__(
             self, config: Config, filename: str, data: pd.DataFrame,
             station: Station, station_extra_info: StationExtraInfo, height: float,
-            contributors: list[Contributor], citations: list[str], persons: str,
+            contributors: list[ContributorWithWeight], citations: list[str],
             nc_cnt: int, row_counter: int, hashsums: list[str],
-            dataset_creation_data: dt.datetime, obspack_creation_date: str) -> None:
+            dataset_creation_data: dt.datetime, obspack_creation_date: str,
+            obspack_name: str, obspack_citation: str) -> None:
         self.config = config
         self.counter = row_counter
         self.obspack_creation_date = obspack_creation_date
@@ -56,39 +57,39 @@ class DataWriter:
         self.height = height
         self.station = station
         self.station_extra_info = station_extra_info
-        self.contributors = contributors
+        self.contributor_uris = [contributor.uri for contributor in contributors]
+        self.persons = ' AND '.join([
+            f'{contributor.first_name} {contributor.last_name}' for contributor in contributors])
         self.citations = citations
-        self.persons = persons
         self.nc_cnt = nc_cnt
         self.hashsums = hashsums
         self.netcdf_dataset = netCDF4.Dataset(
             self.path_to_netcdf_file, 'w', format='NETCDF4', clobber=True)
-        self.obspack_name = (
-            f'obspack_{self.config.gas}_466_{self.config.obspack_product_name}_'
-            f'{self.config.obspack_product_version}_{self.dataset_creation_data.strftime("%Y%m%d")}')
+        self.obspack_name = obspack_name
+        self.obspack_citation = obspack_citation
 
     def produce_files(self) -> None:
         """Produce the netCDF and CSV files."""
-        time0 = dt.datetime.now()
+        start_time = dt.datetime.now(dt.timezone.utc)
         variables = self._calculate_variables()
-        time1 = timeit(time0, f'    Calculate variables for {self.filename}', self.config.print_timing_messages)
+        time_after_calculating_variables = timeit(start_time, f'    Calculate variables for {self.filename}', self.config.print_timing_messages)
         self._initialize_netcdf()
-        time2 = timeit(time1, f'    Initialize netCDF for {self.filename}', self.config.print_timing_messages)
+        time_after_initializing_netcdf = timeit(time_after_calculating_variables, f'    Initialize netCDF for {self.filename}', self.config.print_timing_messages)
         self._fill_attributes()
-        time3 = timeit(time2, f'    Fill attributes for {self.filename}', self.config.print_timing_messages)
+        time_after_filling_attributes = timeit(time_after_initializing_netcdf, f'    Fill attributes for {self.filename}', self.config.print_timing_messages)
         self._fill_netcdf_variables(variables)
-        time4 = timeit(time3, f'    Fill netCDF variables for {self.filename}', self.config.print_timing_messages)
+        time_after_filling_variables = timeit(time_after_filling_attributes, f'    Fill netCDF variables for {self.filename}', self.config.print_timing_messages)
         self.netcdf_dataset.sync()
-        time5 = timeit(time4, f'    Sync netCDF for {self.filename}', self.config.print_timing_messages)
+        time_after_syncing_netcdf = timeit(time_after_filling_variables, f'    Sync netCDF for {self.filename}', self.config.print_timing_messages)
         self.netcdf_dataset.close()
-        time6 = timeit(time5, f'    Close netCDF for {self.filename}', self.config.print_timing_messages)
+        time_after_closing_netcdf = timeit(time_after_syncing_netcdf, f'    Close netCDF for {self.filename}', self.config.print_timing_messages)
         metadata_filename = Path(self.config.json, f'{self.filename}.json')
         with open(metadata_filename, 'w') as metadata_file:
             json.dump(self._generate_metadata(), metadata_file, indent=2)
-        time7 = timeit(time6, f'    Write metadata for {self.filename}', self.config.print_timing_messages)
+        time_after_saving_metadata = timeit(time_after_closing_netcdf, f'    Write metadata for {self.filename}', self.config.print_timing_messages)
         if self.config.do_txt:
             self._produce_csv_file(variables)
-        _ = timeit(time7, f'    Write CSV for {self.filename}', self.config.print_timing_messages)
+        _ = timeit(time_after_saving_metadata, f'    Write CSV for {self.filename}', self.config.print_timing_messages)
 
     def _initialize_netcdf(self):
         self.netcdf_dataset.createDimension('time', self.data.shape[0])
@@ -420,7 +421,7 @@ class DataWriter:
             'obspack_usage_policy': 'https://www.icos-cp.eu/data-services/about-data-portal/data-license',
             'obspack_data_license': 'https://creativecommons.org/licenses/by/4.0/',
             'obspack_identifier_link': f'https://doi.org/{self.config.doi}',
-            'obspack_citation': self.config.citation,
+            'obspack_citation': self.obspack_citation,
             'Conventions': 'CF-1.7',
             'nc.institution': 'Unidata',
             'source': 'ICOS RI',
@@ -434,14 +435,14 @@ class DataWriter:
         variables: dict[str, Any] = {}
         timestamps = self.data.index.astype('int64') // 10**9 # Convert to seconds since epoch
         index_mid = self.data.index + dt.timedelta(seconds=1800)
-        time0 = dt.datetime.now()
+        time_before_calculating_temporal_variables = dt.datetime.now(dt.timezone.utc)
         variables['start_time'] = timestamps
         variables['time'] = timestamps + 1800
         variables['datetime'] = [t.isoformat().replace('+00:00', 'Z') for t in index_mid]
         variables['time_decimal'] = [year_fraction(t) for t in index_mid]
         variables['time_components'] = [extract_temporal_components(i, 1800) for i in self.data.index]
         variables['solartime_components'] = [extract_temporal_components(i, 1800 + self.station_extra_info.timezone * 3600) for i in self.data.index]
-        _ = timeit(time0, f'        Calculate time variables for {self.filename}', self.config.print_timing_messages)
+        _ = timeit(time_before_calculating_temporal_variables, f'        Calculate time variables for {self.filename}', self.config.print_timing_messages)
         variables['value'] = self.data['Meas'].array
         variables['value_std_dev'] = self.data['Stdev'].array
         variables['nvalue'] = self.data['NbPoints'].array
@@ -481,7 +482,7 @@ class DataWriter:
                 self.netcdf_dataset[variable][:] = values
 
     def _produce_csv_file(self, variables: dict[str, Any]):
-        time0 = dt.datetime.now()
+        start_time = dt.datetime.now(dt.timezone.utc)
         order_of_variables = [
             'datetime', 'year', 'month', 'day', 'hour', 'minute', 'second',
             'time', 'start_time', 'time_decimal', 'value', 'value_std_dev', 'nvalue',
@@ -498,7 +499,7 @@ class DataWriter:
             'second': index.second
         }
         csv_data = pd.DataFrame(columns=order_of_variables)
-        time1 = timeit(time0, f'        Initialize CSV data table for {self.filename}', self.config.print_timing_messages)
+        time_after_initializing_csv = timeit(start_time, f'        Initialize CSV data table for {self.filename}', self.config.print_timing_messages)
         for variable in order_of_variables:
             if variable in variables.keys():
                 csv_data[variable] = variables[variable]
@@ -506,18 +507,18 @@ class DataWriter:
                 csv_data[variable] = time_components[variable]
             else:
                 print(f'Variable {variable} is not defined but is requested by the CSV file, skipping.')
-        time2 = timeit(time1, f'        Fill CSV data table for {self.filename}', self.config.print_timing_messages)
+        time_after_filling_csv = timeit(time_after_initializing_csv, f'        Fill CSV data table for {self.filename}', self.config.print_timing_messages)
         csv_path = Path(self.config.txt, f'{self.filename}.txt')
         skipped_variables = set(variables.keys()).difference(set(order_of_variables))
         header = self._create_txt_header(skipped_variables=skipped_variables)
-        time3 = timeit(time2, f'        Create header for CSV {self.filename}', self.config.print_timing_messages)
+        time_after_creating_csv_header = timeit(time_after_filling_csv, f'        Create header for CSV {self.filename}', self.config.print_timing_messages)
         with open(csv_path, 'w') as csv_file:
             for line in header:
                 csv_file.write(f'{line}\n')
-        time4 = timeit(time3, f'        Write header for CSV {self.filename}', self.config.print_timing_messages)
+        time_after_writing_csv_header = timeit(time_after_creating_csv_header, f'        Write header for CSV {self.filename}', self.config.print_timing_messages)
         csv_data.to_csv(
             csv_path, mode='a', sep=' ', na_rep='-999999', header=True, index=False, float_format='%.5f')
-        _ = timeit(time4, f'        Write CSV data for {self.filename}', self.config.print_timing_messages)
+        _ = timeit(time_after_writing_csv_header, f'        Write CSV data for {self.filename}', self.config.print_timing_messages)
 
     def _create_txt_header(self, skipped_variables: set[str]) -> list[str]:
         with open(self.config.header) as f:
@@ -551,7 +552,7 @@ class DataWriter:
             if 'doi_xxx' in line:
                 line = line.replace('doi_xxx', self.config.doi)
             if 'citation_xxx' in line:
-                line = line.replace('citation_xxx', self.config.citation)
+                line = line.replace('citation_xxx', self.obspack_citation)
             if 'obspack_xxx' in line:
                 line = line.replace('obspack_xxx', self.obspack_name)
             if 'dataset_xxx' in line:
@@ -583,7 +584,7 @@ class DataWriter:
                 "samplingHeight": self.height,
                 "production": {
                     "creator": "http://meta.icos-cp.eu/resources/organizations/CP",
-                    "contributors": [contributor.uri for contributor in self.contributors],
+                    "contributors": self.contributor_uris,
                     "hostOrganization": "http://meta.icos-cp.eu/resources/organizations/CP",
                     "comment": (
                         "European Obspack observational timeseries in netcdf format of ambient mole"

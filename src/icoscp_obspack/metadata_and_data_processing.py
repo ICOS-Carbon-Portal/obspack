@@ -1,5 +1,6 @@
 # Standard library imports.
 import pickle
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
@@ -8,15 +9,18 @@ from zipfile import ZipFile
 import pandas as pd
 from datetime import datetime, timezone
 from icoscp_core.icos import meta, data, ATMO_STATION
+from icoscp_core.metaclient import Station
 from icoscp_core.metacore import AtcStationSpecifics, DataObject, Person, SpatioTemporalMeta
 from icoscp_core.queries.stationlist import StationLite
 from icoscp_core.rolemeta import Membership
 from pandas._typing import DtypeArg
 
 # Local application/library specific imports.
-from icoscp_obspack.citation import Contributor, ContributorWithWeight, citation
+from icoscp_obspack.citation import Contributor, ContributorWithWeight, citation, doi_citation
 from icoscp_obspack.config import Config
 from icoscp_obspack.data_writer import DataWriter, StationExtraInfo, NetcdfFileInfoForUploader
+from icoscp_obspack.doi import GeoLocation, GeoLocationPoint, produce_doi_meta
+from icoscp_obspack.geo_json import Geometry, GeoFeature, GeoJson, GeoProperties, produce_geo_json
 from icoscp_obspack.plotting import get_global_average, ghg_filter_ts, plot_timeseries_station
 from icoscp_obspack.utils import timeit
 
@@ -59,11 +63,6 @@ good_flags_per_data_type = {
 
 # Unique dataset ID in the obspack product.
 first_dataset_id = {'co2': 1000, 'ch4': 2000, 'n2o': 3000, 'co': 4000}
-# Hard-coded dataset IDs for cases where the sorting of data objects is not the same as in previous
-# Obspack versions. It would be better to store the correspondance between dataset IDs and station +
-# sampling height in a separate file rather than relying on the sorting of the stations and sampling heights.
-specific_dataset_ids: dict[str, dict[float, int]] = {
-    'SSL': {12: first_dataset_id[c.gas] + 74, 35: first_dataset_id[c.gas] + 73}}
 
 # Additional contributors for specific stations.
 additional_contributors: dict[str, list[Contributor]] = {
@@ -83,44 +82,50 @@ additional_contributors: dict[str, list[Contributor]] = {
 sampling_heights_to_skip: dict[str, list[float]] = {'JFJ': [5]}
 
 # Data objects that are deprecated but should be included for some stations and sampling heights.
-deprecated_dobjs_to_use: dict[str, dict[float, list[str]]] = {
-    'HUN': {50: ['https://meta.icos-cp.eu/objects/fbBbk-WthWCXsAyN4UoZaZtY']}
+deprecated_dobjs_to_use: dict[str, dict[str, dict[float, list[str]]]] = {
+    'co2': {},
+    'ch4': {'HUN': {50: ['https://meta.icos-cp.eu/objects/fbBbk-WthWCXsAyN4UoZaZtY']}},
+    'n2o': {},
+    'co': {}
 }
 #replace_sampling_height: dict[str, dict[float, float]] = {
 #    'HUN': {48: 50}
 #}
 
+@dataclass(frozen=True)
+class SamplingHeightContent:
+    data: pd.DataFrame
+    station_meta: Station
+    contributors: list[ContributorWithWeight]
+    citations: list[str]
+    hashsums: list[str]
 
 def main():
-    time0 = datetime.now()
-    obspack_creation_date = datetime.now(tz=timezone.utc).isoformat()
-    #lab_numbers: pd.DataFrame = pd.read_csv(c.file_lab_numbers, comment='#', delimiter=';')
-    icos_stations: pd.DataFrame = pd.read_csv(c.file_icos_stations, comment='#', delimiter=';')
-    global_avg: pd.DataFrame = get_global_average(c)
-    time1 = timeit(time0, 'Read files with background information', c.print_timing_messages)
-
-    if global_avg.empty:
-        global_avg_filtered = pd.DataFrame(columns=['Trend'])
+    if c.gas not in ['co2', 'ch4', 'n2o', 'co']:
+        raise ValueError(f"Invalid gas: {c.gas}.\nPossible values are 'co2', 'ch4', 'n2o', 'co'.")
+    if c.debug:
+        print(f'Running obspack for gas: "{c.gas}" in debug mode...')
     else:
-        global_avg_filtered: pd.DataFrame = \
-            ghg_filter_ts(global_avg['JulDate'], global_avg['Meas']) if c.analyse else pd.DataFrame()
-    _ = timeit(time1, 'Filter global average concentration data', c.print_timing_messages)
-
-    row_counter = 0
+        print(f'Running obspack for gas: "{c.gas}" in normal mode...')
+    print(f'\n\n{"_"*122}\nProcessing metadata and data...')
+    collecting_info_start_time = datetime.now(tz=timezone.utc)
+    content_from_all_sampling_heights: dict[str, dict[float, SamplingHeightContent]] = {}
     contributors_to_collection: list[Contributor] = []
-    nc_files_info_for_uploader: list[NetcdfFileInfoForUploader] = []
-    dataset_id = first_dataset_id[c.gas]
+    geo_locations: list[GeoLocation] = []
+    geo_features: list[GeoFeature] = []
+    earliest_dt: datetime | None = None
+    latest_dt: datetime | None = None
     meta_stations = meta.list_stations(ATMO_STATION)
     n_stations = len(meta_stations)
     for n, station in enumerate(meta_stations):
-        print('\n\n', '_'*122, '\n', f'Station {station.id} ({n+1}/{n_stations})\n', '_'*122, sep='')
-        time3 = datetime.now()
+        print(f'\n\n{"-"*122}\nStation {station.id} ({n+1}/{n_stations})\n{"-"*122}')
+        fetching_station_info_start_time = datetime.now(tz=timezone.utc)
         station_meta = meta.get_station_meta(station.uri.replace('http:', 'https:'))
         # Filter out stations that are not ATC stations or ICOS stations of level 1 or 2.
         if not isinstance(station_meta.specificInfo, AtcStationSpecifics):
             print(f'Skipping station {station.id} because it is not an ATC station.')
             continue
-        if station_meta.specificInfo.stationClass not in ['1', '2']:
+        if station_meta.specificInfo.stationClass not in ['1', '2'] and c.use_only_icos_stations_l1_or_l2:
             print(f'Skipping station {station.id} because it is not a ICOS level 1 or 2 station.')
             continue
         # Collect information about the staff of the station.
@@ -129,39 +134,41 @@ def main():
         if station.id in additional_contributors.keys():
             contributors_to_station.extend(additional_contributors[station.id])
         persons_at_station: list[Person] = [member.person for member in station_meta.staff]
-        # Extract additional information about the station from the CSV file at config.file_icos_stations.
-        station_extra_info = extract_station_extra_info(icos_stations, station.id)
-        time4 = timeit(time3, f'Collect metadata, contributors and extra info for station {station.id}', c.print_timing_messages)
+        fetching_station_info_end_time = timeit(fetching_station_info_start_time, f'Collect metadata and contributors for station {station.id}', c.print_timing_messages)
 
         # Find all relevant data objects for a given station and separate them by sampling height.
         dobjs_per_sampling_height = dobjs_from_station_by_sampling_height(station)
-        _ = timeit(time4, f'Find data objects for station {station.id} and organize them by sampling height', c.print_timing_messages)
+        if len(dobjs_per_sampling_height) == 0: continue
+        _ = timeit(fetching_station_info_end_time, f'Find data objects for station {station.id} and organize them by sampling height', c.print_timing_messages)
 
-        # Process data files for each sampling height at the current station.
-        n_heights = len(dobjs_per_sampling_height.keys())
+        # Store geolocation of station for DOI minting and Obspack release upload.
+        geo_locations.append(GeoLocation(
+            GeoLocationPoint(pointLongitude=station.lon, pointLatitude=station.lat),
+            geoLocationPlace=station.id))
+        if station.lon is not None and station.lat is not None:
+            geo_features.append(GeoFeature(
+                geometry=Geometry(coordinates=(station.lon, station.lat), type="Point"),
+                properties=GeoProperties(label=station.id),
+                type="Feature"))
+
+        if c.print_timing_messages: print('-'*122)
+
+        # Process metadata and data for each sampling height at the current station.
+        content_from_all_sampling_heights[station.id] = {}
         for sampling_height, dobjs_at_sampling_height in dobjs_per_sampling_height.items():
-            if station.id in sampling_heights_to_skip.keys() and sampling_height in sampling_heights_to_skip[station.id]:
+            if station.id in sampling_heights_to_skip.keys() \
+                and sampling_height in sampling_heights_to_skip[station.id]:
                 continue
-            print(
-                '-'*122, '\n',
-                f'Station {station.id} (class {station_meta.specificInfo.stationClass}), ',
-                f'Sampling height: {sampling_height} m, ',
-                f'Processing {len(dobjs_at_sampling_height)} files',
-                sep='')
-
-            # Create the Obspack file name from available information.
-            # If a station has more than one measurement height, it is considered a "tower-insitu".
-            # If a station has one measurement height, it is considered a "surface-insitu".
-            if n_heights > 1:
-                filename = '_'.join([
-                    c.gas, station.id.lower(), 'tower-insitu', str(station_extra_info.lab_id),
-                    f'allvalid-{int(sampling_height)}magl'])
+            if station_meta.specificInfo.stationClass is None:
+                station_class_msg = 'non-ICOS station'
             else:
-                filename = '_'.join([
-                    c.gas, station.id.lower(), 'surface-insitu', str(station_extra_info.lab_id),
-                    'allvalid'])
+                station_class_msg = f'class {station_meta.specificInfo.stationClass}'
+            print(
+                f'Station {station.id} ({station_class_msg}),'
+                f' Sampling height: {sampling_height} m,'
+                f' Processing {len(dobjs_at_sampling_height)} file(s)')
 
-            time5 = datetime.now()
+            fetching_sampling_height_start_time = datetime.now(tz=timezone.utc)
             # Produce one dataset (pandas.DataFrame) with all datasets from the current station
             # and sampling height.
             data_at_sampling_height, used_dobjs_at_sampling_height = combine_data_files(
@@ -169,10 +176,21 @@ def main():
             if data_at_sampling_height.empty:
                 print(f'No data found for station {station.id} and sampling height {sampling_height} m.')
                 continue
-            time6 = timeit(time5, f'Combine data files for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
+            combining_datasets_end_time = timeit(fetching_sampling_height_start_time, f'Combine data files for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
+
+            # Track the earliest and latest measurement date and time of the entire Obspack product.
+            # The values are used for the upper limit of the x-axis of the figures, and when uploading
+            # the Obspack release to the data portal.
+            if earliest_dt is None or data_at_sampling_height.index[0] < earliest_dt:
+                earliest_dt = data_at_sampling_height.index[0]
+            if latest_dt is None or data_at_sampling_height.index[-1] > latest_dt:
+                latest_dt = data_at_sampling_height.index[-1]
 
             # Handle contributors and citations.
-            citations: list[str] = [citation for citation in c.default_citations]
+            if station_meta.specificInfo.stationClass is None:
+                citations: list[str] = []
+            else:
+                citations: list[str] = [citation for citation in c.default_citations]
             contributors_to_file: list[Contributor] = [contributor for contributor in contributors_to_station]
             short_hashsums: list[str] = []
             for dobj in used_dobjs_at_sampling_height:
@@ -197,62 +215,138 @@ def main():
                 short_hashsums.append(dobj.hash[:24])
             contributors_to_file_cleaned = clean_and_sort_contributors(contributors_to_file)
             contributors_to_collection.extend(contributors_to_file)
-            list_of_contributor_names = [
-                f'{contributor.first_name} {contributor.last_name}' for contributor in contributors_to_file_cleaned]
-            persons = ' AND '.join(list_of_contributor_names)
-            time7 = timeit(time6, f'Handle contributors and citations for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
+            _ = timeit(combining_datasets_end_time, f'Handle contributors and citations for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
 
-            if c.do_png:
-                plot_timeseries_station(
-                    config=c, dataset=data_at_sampling_height, global_avg=global_avg,
-                    global_avg_filtered=global_avg_filtered, station_id=station.id,
-                    sampling_height=sampling_height, filename=filename)
-            time8 = timeit(time7, f'Make figure for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
+            content_from_all_sampling_heights[station.id][sampling_height] = SamplingHeightContent(
+                data=data_at_sampling_height,
+                station_meta=station_meta,
+                contributors=contributors_to_file_cleaned,
+                citations=citations,
+                hashsums=short_hashsums)
 
-            try:
-                if station.id in specific_dataset_ids.keys() and sampling_height in specific_dataset_ids[station.id].keys():
-                    ds_id = specific_dataset_ids[station.id][sampling_height]
-                else:
-                    ds_id = dataset_id
-                data_writer = DataWriter(
-                    config=c, filename=filename, data=data_at_sampling_height,
-                    station=station_meta, station_extra_info=station_extra_info, height=sampling_height,
-                    contributors=contributors_to_file, citations=citations, persons=persons,
-                    nc_cnt=ds_id, row_counter=row_counter, hashsums=short_hashsums,
-                    dataset_creation_data=datetime.now(tz=timezone.utc),
-                    obspack_creation_date=obspack_creation_date)
-                data_writer.produce_files()
-                row_counter += data_at_sampling_height.shape[0]
-            except Exception:
-                print(f'Error writing NetCDF file "{filename}.')
-                raise
-            _ = timeit(time8, f'Produce netCDF and CSV files for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
+            _ = timeit(fetching_sampling_height_start_time, f'Total processing time for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
+            if c.print_timing_messages: print('-'*122)
+        _ = timeit(fetching_station_info_start_time, f'Total processing time for station {station.id}', c.print_timing_messages)
+        if c.print_timing_messages: print('-'*122)
+    if c.print_timing_messages: print(f'\n\n{"-"*122}')
+    _ = timeit(collecting_info_start_time, 'Total time to process metadata and data.', c.print_timing_messages)
+    n_stations_with_data = len(content_from_all_sampling_heights)
+    n_sampling_heights_with_data = sum([len(sh) for sh in content_from_all_sampling_heights.values()])
+    print(
+        f'\n\n{"-"*122}\nFinished processing metadata and data from {n_stations_with_data} stations and'
+        f' {n_sampling_heights_with_data} sampling heights where data exist.\nThe earliest measurement'
+        f' was taken on {earliest_dt} and the latest measurement was taken on {latest_dt}.\n{"-"*122}')
 
-            nc_files_info_for_uploader.append(NetcdfFileInfoForUploader(
-                filename=filename,
-                folder=c.nc,
-                station=station.id,
-                sampling_height=sampling_height,
-                hash=short_hashsums,
-                handle=''))
-            dataset_id = dataset_id + 1
-            _ = timeit(time5, f'Total processing time for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
-        if c.print_timing_messages:
-            print('_'*122)
-        _ = timeit(time3, f'Total processing time for station {station.id}', c.print_timing_messages)
-
-    pd.DataFrame(nc_files_info_for_uploader).to_csv(Path(c.output, 'info_about_produced_netcdf_files.csv'))
+    # Fetch content from some files.
+    #lab_numbers: pd.DataFrame = pd.read_csv(c.file_lab_numbers, comment='#', delimiter=';')
+    icos_stations: pd.DataFrame = pd.read_csv(c.file_icos_stations, comment='#', delimiter=';')
+    if c.do_png:
+        global_avg: pd.DataFrame = get_global_average(c)
+        if global_avg.empty:
+            global_avg_filtered = pd.DataFrame(columns=['Trend'])
+        else:
+            global_avg_filtered: pd.DataFrame = \
+                ghg_filter_ts(global_avg['JulDate'], global_avg['Meas']) if c.analyse else pd.DataFrame()
+    else:
+        global_avg = pd.DataFrame()
+        global_avg_filtered = pd.DataFrame()
 
     # Handle contributors to the Obspack collection.
     contributors_to_collection_cleaned = clean_and_sort_contributors(contributors_to_collection)
+    # Save JSON to be pasted in the DOI app for minting the DOI of the Obspack release.
+    produce_doi_meta(c, contributors_to_collection_cleaned, geo_locations)
     # Save contributor and author info as json for the DOI minting.
+    # These files are not needed anymore since the JSON created in the previous step includes all information
+    # about authors and contributors, but it is kept here as legacy.
     path_to_authors_file = Path(c.output, f'authors_{c.gas}.json')
     path_to_contributors_file = Path(c.output, f'contributors_{c.gas}.json')
     with open(path_to_authors_file, 'w') as authors_file:
         authors_file.write(citation(contributors_to_collection_cleaned, as_contrib=False))
     with open(path_to_contributors_file, 'w') as contributors_file:
         contributors_file.write(citation(contributors_to_collection_cleaned, as_contrib=True))
-    _ = timeit(time0, 'Total processing time', c.print_timing_messages)
+    # Save GeoJSON of station locations. The GeoJSON can be used when uploading the Obspack release
+    # to the data portal.
+    geo_json = GeoJson(features=geo_features, type='FeatureCollection')
+    produce_geo_json(geo_json, Path(c.output, f'GeoJSON_{c.gas}.json'))
+    # Wait for the DOI to be minted before continuing
+    user_input = None
+    while user_input is None:
+        user_input = input(
+            f'\n\n{"_"*122}\nThe JSON for the DOI minting is available in {c.doi_json_file}.'
+            '\nPress Enter to continue after the new DOI has been minted.')
+
+    # Produce netCDF and CSV files, as well as figures.
+    print(f'\n\n{"_"*122}\nWriting data...')
+    writing_data_start_time = datetime.now(tz=timezone.utc)
+    n_stations = len(content_from_all_sampling_heights)
+    station_counter = 0
+    row_counter = 0
+    nc_files_info_for_uploader: list[NetcdfFileInfoForUploader] = []
+    dataset_id = first_dataset_id[c.gas]
+    obspack_name = (
+        f'obspack_{c.gas}_466_{c.obspack_product_name}_'
+        f'{c.obspack_product_version}_{writing_data_start_time.strftime("%Y%m%d")}')
+    obspack_citation = doi_citation(c.doi)
+    for station_id, station_content in content_from_all_sampling_heights.items():
+        print(f'\n\n{"-"*122}\nStation {station_id} ({station_counter+1}/{n_stations})\n{"-"*122}')
+        writing_station_data_start_time = datetime.now(tz=timezone.utc)
+        n_heights = len(station_content.keys())
+        station_extra_info = extract_station_extra_info(icos_stations, station_id)
+        for sampling_height, sampling_height_content in station_content.items():
+            writing_sampling_height_data_start_time = datetime.now(tz=timezone.utc)
+            # If a station has more than one measurement height, it is considered a "tower-insitu".
+            # If a station has one measurement height, it is considered a "surface-insitu".
+            if n_heights > 1:
+                filename = '_'.join([
+                    c.gas, station_id.lower(), 'tower-insitu', str(station_extra_info.lab_id),
+                    f'allvalid-{int(sampling_height)}magl'])
+            else:
+                filename = '_'.join([
+                    c.gas, station_id.lower(), 'surface-insitu', str(station_extra_info.lab_id),
+                    'allvalid'])
+
+            if c.do_png:
+                plot_timeseries_station(
+                    config=c, dataset=sampling_height_content.data, global_avg=global_avg,
+                    global_avg_filtered=global_avg_filtered, station_id=station_id,
+                    sampling_height=sampling_height, filename=filename,
+                    latest_measurement_dt=latest_dt)
+            plotting_end_time = timeit(writing_sampling_height_data_start_time, f'Make figure for station {station_id} and sampling height {sampling_height}', c.print_timing_messages)
+
+            try:
+                data_writer = DataWriter(
+                    config=c, filename=filename, data=sampling_height_content.data,
+                    station=sampling_height_content.station_meta, station_extra_info=station_extra_info,
+                    height=sampling_height, contributors=sampling_height_content.contributors,
+                    citations=sampling_height_content.citations, nc_cnt=dataset_id, row_counter=row_counter,
+                    hashsums=sampling_height_content.hashsums,
+                    dataset_creation_data=datetime.now(tz=timezone.utc),
+                    obspack_creation_date=writing_data_start_time.isoformat(),
+                    obspack_name=obspack_name, obspack_citation=obspack_citation)
+                data_writer.produce_files()
+                row_counter += sampling_height_content.data.shape[0]
+            except Exception:
+                print(f'Error writing NetCDF file "{filename}.')
+                raise
+            _ = timeit(plotting_end_time, f'Produce netCDF and CSV files for station {station_id} and sampling height {sampling_height}', c.print_timing_messages)
+
+            nc_files_info_for_uploader.append(NetcdfFileInfoForUploader(
+                filename=filename,
+                folder=c.nc,
+                station=station_id,
+                sampling_height=sampling_height,
+                hash=sampling_height_content.hashsums,
+                handle=''))
+            dataset_id += 1
+            _ = timeit(writing_sampling_height_data_start_time, f'Total processing time for station {station_id} and sampling height {sampling_height}', c.print_timing_messages)
+            if c.print_timing_messages: print('-'*122)
+        station_counter += 1
+        _ = timeit(writing_station_data_start_time, f'Total processing time for station {station_id}', c.print_timing_messages)
+        if c.print_timing_messages: print('-'*122)
+    if c.print_timing_messages: print(f'\n\n{"-"*122}')
+    _ = timeit(writing_data_start_time, 'Total time to producte netCDF and CSV files, as well as figures.', c.print_timing_messages)
+
+    pd.DataFrame(nc_files_info_for_uploader).to_csv(c.info_about_produced_files)
 
 def extract_station_extra_info(icos_stations: pd.DataFrame, station_id: str) -> StationExtraInfo:
     cond = icos_stations['Hist'] == station_id
@@ -313,8 +407,8 @@ def dobjs_from_station_by_sampling_height(station: StationLite) -> dict[float, l
                 .setdefault(sampling_height, [])\
                 .append(meta.get_dobj_meta(dobj_lite))
     # Add deprecated data objects for some stations and sampling heights.
-    if station.id in deprecated_dobjs_to_use.keys():
-        for h, urls in deprecated_dobjs_to_use[station.id].items():
+    if station.id in deprecated_dobjs_to_use[c.gas].keys():
+        for h, urls in deprecated_dobjs_to_use[c.gas][station.id].items():
             dobjs_per_sampling_height.setdefault(h, []).extend([meta.get_dobj_meta(url) for url in urls])
     return dobjs_per_sampling_height
 
@@ -385,7 +479,8 @@ def clean_and_sort_contributors(contributors: list[Contributor]) -> list[Contrib
         contributors_with_same_uri.sort(key=lambda contrib: contrib.weight or 0, reverse=True)
         contributors_cleaned.append(ContributorWithWeight.from_contributor(
             contributors_with_same_uri[0], c.default_contributor_weight))
-    contributors_cleaned.sort(key=lambda contributor: (-contributor.weight, contributor.last_name))
+    contributors_cleaned.sort(
+        key=lambda contributor: (-contributor.weight, contributor.last_name, contributor.first_name))
     return contributors_cleaned
 
 def combine_data_files(
@@ -408,8 +503,6 @@ def combine_data_files(
     start_per_data_type: dict[str, datetime | None] = {}
     stop_per_data_type: dict[str, datetime | None] = {}
     for dobj in dobjs:
-        #if dobj.specification.dataLevel == 1 and c.gas == 'n2o' and station_id in ['HTM', 'SVB']:
-        #    print(f'Skipping data object with hashsum {dobj.hash} at station {station_id}.')
         for data_type in ['historic', 'L2', 'fasttrack', 'nrt']:
             if dobj.specification.self.uri == specs_per_gas[c.gas][data_type]:
                 dataset: pd.DataFrame = get_dataset(dobj)
@@ -426,10 +519,10 @@ def combine_data_files(
                 # datasets were added manually among the deprecated datasets that need to be included.
                 if data_type in data_per_type.keys():
                     additional_dobj_is_needed = (
-                        station_id in deprecated_dobjs_to_use.keys()
-                        and sampling_height in deprecated_dobjs_to_use[station_id].keys()
+                        station_id in deprecated_dobjs_to_use[c.gas].keys()
+                        and sampling_height in deprecated_dobjs_to_use[c.gas][station_id].keys()
                         and f'https://meta.icos-cp.eu/objects/{dobj.hash[:24]}'
-                        in deprecated_dobjs_to_use[station_id][sampling_height])
+                        in deprecated_dobjs_to_use[c.gas][station_id][sampling_height])
                     if additional_dobj_is_needed:
                         if dataset['Datetime'].iloc[-1] < data_per_type[data_type]['Datetime'].iloc[0]:
                             data_per_type[data_type] = pd.concat([dataset, data_per_type[data_type]])

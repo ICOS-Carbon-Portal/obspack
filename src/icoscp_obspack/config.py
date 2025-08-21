@@ -1,7 +1,7 @@
 # Standard library imports.
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 # Related third party imports.
 import yaml
@@ -18,15 +18,28 @@ class YamlConfig:
     doi: str
     dois_for_default_citations: list[str]
     obspack_product_name: str
-    obspack_product_version: str
+    obspack_product_version: Optional[str]
+    major_version_for_doi: int
+    minor_version_for_doi: int
+    title_for_doi: str
+    description_for_doi: str
+    subjects_for_doi: list[str]
+    publisher_for_doi: Optional[str]
+    resource_type_for_doi: Optional[str]
+    format_info_for_doi: Optional[str]
+    rights_for_doi: Optional[str]
+    rights_uri_for_doi: Optional[str]
     input: Optional[str]
     output: Optional[str]
+    doi_json_file: Optional[str]
+    info_about_produced_files: Optional[str]
     nc: Optional[str]
     json: Optional[str]
     txt: Optional[str]
     png: Optional[str]
     pickle: Optional[str]
     zip: Optional[str]
+    use_only_icos_stations_l1_or_l2: Optional[bool]
     use_cached_datafiles: Optional[bool]
     analyse: Optional[bool]
     do_png: Optional[bool]
@@ -44,45 +57,63 @@ class YamlConfig:
 
 
 class Config:
-
     def __init__(self) -> None:
         with open(YAML_CONFIG) as yaml_handler:
             config = YamlConfig(**yaml.safe_load(yaml_handler))
 
-        if config.gas not in ['co2', 'ch4', 'n2o', 'co']:
-            raise ValueError(f"Invalid gas: {config.gas}.\nPossible values are 'co2', 'ch4', 'n2o', 'co'.")
-
-        if config.debug:
-            print(f'Running obspack for gas: "{config.gas}" in debug mode...')
-        else:
-            print(f'Running obspack for gas: "{config.gas}" in normal mode...')
-        print('-------------')
-
         self.gas: str = config.gas
         self.doi: str = config.doi
-        self.citation: str = doi_citation(config.doi)
         self.default_citations: list[str] = [doi_citation(doi) for doi in config.dois_for_default_citations]
         self.obspack_product_name: str = config.obspack_product_name
-        self.obspack_product_version: str = config.obspack_product_version
+        self.obspack_product_version: str = self._value_with_default(
+            config.obspack_product_version,
+            f'v{config.major_version_for_doi}.{config.minor_version_for_doi}')
+        self.major_version_for_doi: int = config.major_version_for_doi
+        self.minor_version_for_doi: int = config.minor_version_for_doi
+        self.title_for_doi: str = config.title_for_doi
+        self.description_for_doi: str = config.description_for_doi
+        self.subjects_for_doi: list[str] = config.subjects_for_doi
+        self.publisher_for_doi: str = self._value_with_default(
+            config.publisher_for_doi, 'ICOS ERIC - Carbon Portal')
+        self.resource_type_for_doi: str = self._value_with_default(
+            config.resource_type_for_doi, 'compressed ZIP archive')
+        self.format_info_for_doi: str = self._value_with_default(
+            config.format_info_for_doi, (
+                'Compressed ZIP archive of netcdf and ASCII files with semicolon separated columns.'
+                ' Overview pictures of recent data and trend plots since 2010 are provided as bitmaps'
+                ' in png format.')
+            )
+        self.rights_for_doi: str = self._value_with_default(
+            config.rights_for_doi, 'Creative Commons Attribution 4.0 International')
+        self.rights_uri_for_doi: str = self._value_with_default(
+            config.rights_uri_for_doi, 'https://creativecommons.org/licenses/by/4.0/legalcode')
 
-        self.use_cached_datafiles: bool = config.use_cached_datafiles or False
-        self.analyse: bool = config.analyse or True
-        self.do_png: bool = config.do_png or True
-        self.display_plots: bool = config.display_plots or False
-        self.do_txt: bool = config.do_txt or True
-        self.debug: bool = config.debug or False
-        self.refresh_pickles: bool = config.refresh_pickles or False
-        self.use_mauna_loa_for_global_co2: bool = config.use_mauna_loa_for_global_co2 or False
-        self.useflags: bool = config.use_flags or True
+        self.use_only_icos_stations_l1_or_l2: bool = self._value_with_default(
+            config.use_only_icos_stations_l1_or_l2, True)
+        self.use_cached_datafiles: bool = self._value_with_default(config.use_cached_datafiles, False)
+        self.analyse: bool = self._value_with_default(config.analyse, True)
+        self.do_png: bool = self._value_with_default(config.do_png, True)
+        self.display_plots: bool = self._value_with_default(config.display_plots, False)
+        self.do_txt: bool = self._value_with_default(config.do_txt, True)
+        self.debug: bool = self._value_with_default(config.debug, False)
+        self.refresh_pickles: bool = self._value_with_default(config.refresh_pickles, False)
+        self.use_mauna_loa_for_global_co2: bool = self._value_with_default(
+            config.use_mauna_loa_for_global_co2, False)
+        self.useflags: bool = self._value_with_default(config.use_flags, True)
 
         self.input: Path = self._init_path(Path('input'), config.input)
         self.output: Path = self._init_path(Path('output', config.gas), config.output)
-        self.nc: Path = self._init_path(Path(self.output, 'nc-files'), config.nc)
-        self.json: Path = self._init_path(Path(self.output, 'json-files'), config.json)
-        self.txt: Path = self._init_path(Path(self.output, 'txt-files'), config.txt)
-        self.png: Path = self._init_path(Path(self.output, 'png-files'), config.png)
-        self.pickle: Path = self._init_path(Path(self.output, 'pickle-files'), config.pickle)
-        self.zip: Path = self._init_path(Path(self.output, 'zip-files'), config.zip)
+        self.doi_json_file: Path = self._init_path(
+            Path(self.output, f'doi_json_{config.gas}.json'), config.doi_json_file, 'file')
+        self.info_about_produced_files: Path = self._init_path(
+            Path(self.output, f'info_about_produced_files_for_{config.gas}.csv'),
+            config.info_about_produced_files, 'file')
+        self.nc: Path = self._init_path(Path(self.output, 'nc'), config.nc)
+        self.json: Path = self._init_path(Path(self.output, 'json'), config.json)
+        self.txt: Path = self._init_path(Path(self.output, 'txt'), config.txt)
+        self.png: Path = self._init_path(Path(self.output, 'png'), config.png)
+        self.pickle: Path = self._init_path(Path(self.output, 'pickle'), config.pickle)
+        self.zip: Path = self._init_path(Path(self.output, 'zip'), config.zip)
 
         self.header: Path = self._init_path(Path(self.input, 'header.txt'), config.header, 'file')
         self.file_lab_numbers: Path = self._init_path(
@@ -117,9 +148,14 @@ class Config:
             self.plot_unit_label = '[nmol/mol]'
             self.plot_limy = [0, 600]
 
-        self.default_contributor_weight: int = config.default_contributor_weight or 0
-        self.print_timing_messages: bool = config.print_timing_messages or False
+        self.default_contributor_weight: int = self._value_with_default(config.default_contributor_weight, 0)
+        self.print_timing_messages: bool = self._value_with_default(config.print_timing_messages, False)
 
+    def _value_with_default(self, val: Any, default: Any) -> Any:
+        if val is None:
+            return default
+        else:
+            return val
 
     def _init_path(
             self, default_path: Path, user_specified_path: Optional[str],

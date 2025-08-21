@@ -1,4 +1,5 @@
 # Standard library imports.
+from datetime import timezone
 from pathlib import Path
 
 # Related third party imports.
@@ -13,7 +14,7 @@ from urllib.error import HTTPError, URLError
 # Local application/library specific imports.
 from icoscp_obspack.ccgfilt import ccgFilter
 from icoscp_obspack.config import Config
-from icoscp_obspack.utils import timeit, t2dt
+from icoscp_obspack.utils import timeit, t2dt, year_fraction
 
 
 def plot_timeseries_station(
@@ -23,7 +24,8 @@ def plot_timeseries_station(
         global_avg_filtered: pd.DataFrame,
         station_id: str,
         sampling_height: float,
-        filename: str
+        filename: str,
+        latest_measurement_dt: datetime | None
 ) -> None:
     """Plot measurements, trend, smoothed curve."""
     path_to_png = Path(config.png, filename)
@@ -31,11 +33,18 @@ def plot_timeseries_station(
     # This is necessary for the ghg_filter_ts function to work correctly.
     dataset_no_tz = dataset.copy()
     dataset_no_tz.index = dataset_no_tz.index.tz_localize(None)
-    time0 = datetime.now()
-    dataset_filtered = ghg_filter_ts(dataset_no_tz['JulDate'], dataset_no_tz['Meas'])
-    _ = timeit(time0, f'    Filter timeseries for station {station_id} at sampling height {sampling_height}', config.print_timing_messages)
+    time_before_filtering = datetime.now(tz=timezone.utc)
+    try:
+        dataset_filtered = ghg_filter_ts(dataset_no_tz['JulDate'], dataset_no_tz['Meas'])
+    except:
+        print(
+            f'The trend and smoothed curve could not be calculated for station {station_id} at sampling'
+            f' height {sampling_height}')
+        dataset_filtered = pd.DataFrame(columns=['Trend', 'SmoothCurve'])
+    _ = timeit(time_before_filtering, f'    Filter timeseries for station {station_id} at sampling height {sampling_height}', config.print_timing_messages)
     station_and_height = f'{station_id} {str(int(sampling_height))}'
-    last_time = dataset['JulDate'].to_numpy()[-1]
+    last_time = year_fraction(latest_measurement_dt) \
+        if latest_measurement_dt is not None else year_fraction(datetime.now(tz=timezone.utc))
     fig = plt.figure(figsize=(15, 8))
     ax = fig.add_axes(rect=(0.125, 0.115, 0.775, 0.775))
     ax.set_title(
@@ -43,9 +52,9 @@ def plot_timeseries_station(
         fontsize=18)
     ax.set_xlabel('Year', fontsize=14)
     ax.set_ylabel(f'{config.plot_gas_label} {config.plot_unit_label}', fontsize=14)
-    ax.set_xlim(2010, last_time)
+    ax.set_xlim(2010, last_time + 0.25)
     ax.set_ylim(*config.plot_limy)
-    ax.set_xticks(range(2010, int(last_time) + 1))
+    ax.set_xticks(range(2010, int(last_time + 0.25) + 1))
     ax.grid(zorder=0, linestyle='-.', color='grey')
     ax.set_facecolor('whitesmoke')
     sns.set_style("white")
