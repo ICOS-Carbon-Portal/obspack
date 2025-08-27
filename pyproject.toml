@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "icoscp_obspack"
-version = "0.1.0"
+version = "0.2.0"
 authors = [{name = "Alex Vermeulen", email = "alex.vermeulen@icos-ri.eu"}]
 maintainers = [
 	{name = "Zois Zogopoulos", email = "zois.zogopoulos@nateko.lu.se"},
@@ -16,14 +16,12 @@ classifiers = ["License :: OSI Approved :: GNU General Public License v3 or late
 requires-python = ">=3.10"
 dynamic = ["description"]
 dependencies = [
-	"icoscp",
 	"icoscp_core==0.3.7",
 	"matplotlib==3.6.0",
 	"netCDF4==1.7.2",
 	"pyyaml==6.0.2",
 	"requests==2.32.3",
 	"scipy==1.15.2",
-	"xarray==2025.3.1",
     "numpy==1.26.4",
     "seaborn==0.13.2",
 ]
