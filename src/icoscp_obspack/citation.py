@@ -6,6 +6,7 @@ from typing import Optional
 import requests
 from requests.structures import CaseInsensitiveDict
 
+
 @dataclass(frozen=True)
 class Contributor:
     uri: str

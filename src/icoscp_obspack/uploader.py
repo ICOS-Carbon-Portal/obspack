@@ -12,6 +12,7 @@ from icoscp_core.icos import auth
 # Local application/library specific imports.
 from icoscp_obspack.config import Config
 
+
 def main():
     config = Config()
     produced = pd.read_csv(config.info_about_produced_files)

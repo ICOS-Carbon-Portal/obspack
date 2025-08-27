@@ -1,14 +1,14 @@
 # Standard library imports.
 import pickle
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
 
 # Related third party imports.
 import pandas as pd
-from datetime import datetime, timezone
-from icoscp_core.icos import meta, data, ATMO_STATION
+from icoscp_core.icos import ATMO_STATION, data, meta
 from icoscp_core.metaclient import Station
 from icoscp_core.metacore import AtcStationSpecifics, DataObject, Person, SpatioTemporalMeta
 from icoscp_core.queries.stationlist import StationLite
@@ -18,9 +18,9 @@ from pandas._typing import DtypeArg
 # Local application/library specific imports.
 from icoscp_obspack.citation import Contributor, ContributorWithWeight, citation, doi_citation
 from icoscp_obspack.config import Config
-from icoscp_obspack.data_writer import DataWriter, StationExtraInfo, NetcdfFileInfoForUploader
+from icoscp_obspack.data_writer import DataWriter, NetcdfFileInfoForUploader, StationExtraInfo
 from icoscp_obspack.doi import GeoLocation, GeoLocationPoint, produce_doi_meta
-from icoscp_obspack.geo_json import Geometry, GeoFeature, GeoJson, GeoProperties, produce_geo_json
+from icoscp_obspack.geo_json import GeoFeature, GeoJson, Geometry, GeoProperties, produce_geo_json
 from icoscp_obspack.plotting import get_global_average, ghg_filter_ts, plot_timeseries_station
 from icoscp_obspack.utils import timeit
 
@@ -138,7 +138,8 @@ def main():
 
         # Find all relevant data objects for a given station and separate them by sampling height.
         dobjs_per_sampling_height = dobjs_from_station_by_sampling_height(station)
-        if len(dobjs_per_sampling_height) == 0: continue
+        if len(dobjs_per_sampling_height) == 0:
+            continue
         _ = timeit(fetching_station_info_end_time, f'Find data objects for station {station.id} and organize them by sampling height', c.print_timing_messages)
 
         # Store geolocation of station for DOI minting and Obspack release upload.
@@ -151,7 +152,8 @@ def main():
                 properties=GeoProperties(label=station.id),
                 type="Feature"))
 
-        if c.print_timing_messages: print('-'*122)
+        if c.print_timing_messages:
+            print('-'*122)
 
         # Process metadata and data for each sampling height at the current station.
         content_from_all_sampling_heights[station.id] = {}
@@ -190,8 +192,8 @@ def main():
             if station_meta.specificInfo.stationClass is None:
                 citations: list[str] = []
             else:
-                citations: list[str] = [citation for citation in c.default_citations]
-            contributors_to_file: list[Contributor] = [contributor for contributor in contributors_to_station]
+                citations: list[str] = c.default_citations.copy()
+            contributors_to_file: list[Contributor] = contributors_to_station.copy()
             short_hashsums: list[str] = []
             for dobj in used_dobjs_at_sampling_height:
                 path_to_pkl_file = Path(c.pickle, f'{dobj.hash}.pkl')
@@ -225,10 +227,13 @@ def main():
                 hashsums=short_hashsums)
 
             _ = timeit(fetching_sampling_height_start_time, f'Total processing time for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
-            if c.print_timing_messages: print('-'*122)
+            if c.print_timing_messages:
+                print('-'*122)
         _ = timeit(fetching_station_info_start_time, f'Total processing time for station {station.id}', c.print_timing_messages)
-        if c.print_timing_messages: print('-'*122)
-    if c.print_timing_messages: print(f'\n\n{"-"*122}')
+        if c.print_timing_messages:
+            print('-'*122)
+    if c.print_timing_messages:
+        print(f'\n\n{"-"*122}')
     _ = timeit(collecting_info_start_time, 'Total time to process metadata and data.', c.print_timing_messages)
     n_stations_with_data = len(content_from_all_sampling_heights)
     n_sampling_heights_with_data = sum([len(sh) for sh in content_from_all_sampling_heights.values()])
@@ -339,11 +344,14 @@ def main():
                 handle=''))
             dataset_id += 1
             _ = timeit(writing_sampling_height_data_start_time, f'Total processing time for station {station_id} and sampling height {sampling_height}', c.print_timing_messages)
-            if c.print_timing_messages: print('-'*122)
+            if c.print_timing_messages:
+                print('-'*122)
         station_counter += 1
         _ = timeit(writing_station_data_start_time, f'Total processing time for station {station_id}', c.print_timing_messages)
-        if c.print_timing_messages: print('-'*122)
-    if c.print_timing_messages: print(f'\n\n{"-"*122}')
+        if c.print_timing_messages:
+            print('-'*122)
+    if c.print_timing_messages:
+        print(f'\n\n{"-"*122}')
     _ = timeit(writing_data_start_time, 'Total time to producte netCDF and CSV files, as well as figures.', c.print_timing_messages)
 
     pd.DataFrame(nc_files_info_for_uploader).to_csv(c.info_about_produced_files)
@@ -587,11 +595,10 @@ def combine_data_files(
             full_dataset = pd.concat([data_per_type['historic'][historic_to_keep], data_per_type['L2']])
         else:
             full_dataset = data_per_type['L2']
+    elif 'historic' in data_per_type.keys():
+        full_dataset = data_per_type['historic']
     else:
-        if 'historic' in data_per_type.keys():
-            full_dataset = data_per_type['historic']
-        else:
-            full_dataset = pd.DataFrame()
+        full_dataset = pd.DataFrame()
     if 'fasttrack' in data_per_type.keys():
         full_dataset = pd.concat([full_dataset, data_per_type['fasttrack']])
         if 'nrt' in data_per_type.keys():

@@ -6,6 +6,7 @@ from pathlib import Path
 # Related third party imports.
 import pandas as pd
 
+
 def timeit(previous_time: datetime, message: str, print_msg: bool) -> datetime:
     """
     Print the time elapsed since the previous time and the current time.

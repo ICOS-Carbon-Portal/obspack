@@ -12,12 +12,13 @@ import numpy as np
 import pandas as pd
 from icoscp_core.icos import meta
 from icoscp_core.metacore import Station
-from icoscp_core.sparql import SparqlResults, BoundUri
+from icoscp_core.sparql import BoundUri, SparqlResults
 
 # Local application/library specific imports.
 from icoscp_obspack.citation import ContributorWithWeight
 from icoscp_obspack.config import Config
-from icoscp_obspack.utils import timeit, get_hash_sum, year_fraction, extract_temporal_components
+from icoscp_obspack.utils import extract_temporal_components, get_hash_sum, timeit, year_fraction
+
 
 @dataclass(frozen=True)
 class StationExtraInfo:
@@ -547,8 +548,8 @@ class DataWriter:
         h_len = len(header_template) + len(header_filtered) + len(header_variables) + 1
 
         txt_header: list[str] = [f'# header_lines : {h_len}']
-        for line in header_template:
-            line = line.replace('\n', '')
+        for header_line in header_template:
+            line = header_line.replace('\n', '')
             if 'doi_xxx' in line:
                 line = line.replace('doi_xxx', self.config.doi)
             if 'citation_xxx' in line:
@@ -607,22 +608,22 @@ class DataWriter:
 
 
 def get_prev_by_name(filename: str) -> str:
-    query = """
+    query = f"""
     PREFIX cpmeta: <http://meta.icos-cp.eu/ontologies/cpmeta/>
     SELECT ?dobj
-    WHERE {
-        VALUES ?spec {
+    WHERE {{
+        VALUES ?spec {{
             <http://meta.icos-cp.eu/resources/cpmeta/ObspackTimeSerieResult>
             <http://meta.icos-cp.eu/resources/cpmeta/ObspackCH4TimeSeriesResult>
             <http://meta.icos-cp.eu/resources/cpmeta/ObspackN2oTimeSeriesResult>
-        }
+        }}
         ?dobj cpmeta:hasObjectSpec ?spec .
         ?dobj cpmeta:hasName ?fileName .
         ?dobj cpmeta:hasSizeInBytes ?size .
-        FILTER(STRSTARTS(str(?fileName), "%s"))
-        FILTER NOT EXISTS {[] cpmeta:isNextVersionOf ?dobj}
-    }
-    """ % filename
+        FILTER(STRSTARTS(str(?fileName), "{filename}"))
+        FILTER NOT EXISTS {{[] cpmeta:isNextVersionOf ?dobj}}
+    }}
+    """
     sparql_res: SparqlResults = meta.sparql_select(query=query)
     if sparql_res.bindings:
         dobj_value = sparql_res.bindings[0]['dobj']

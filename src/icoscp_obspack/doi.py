@@ -264,14 +264,14 @@ def _organization_to_doi_contributor(organization_name: str, contributor_type: C
         nameIdentifiers=[],
         affiliation=[],
         contributorType=contributor_type
-	)
+    )
 
 def _organization_to_doi_creator(organization_name: str) -> Creator:
     return Creator(
         name=GenericName(name=organization_name, nameType='Organizational'),
         nameIdentifiers=[],
         affiliation=[]
-	)
+    )
 
 def _author_to_doi_contributor(author: ContributorWithWeight) -> Contributor:
     return Contributor(

@@ -1,20 +1,19 @@
 # Standard library imports.
-from datetime import timezone
+from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 
 # Related third party imports.
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-from datetime import datetime
 from matplotlib.lines import Line2D
 from numpy.typing import ArrayLike
-from urllib.error import HTTPError, URLError
 
 # Local application/library specific imports.
 from icoscp_obspack.ccgfilt import ccgFilter
 from icoscp_obspack.config import Config
-from icoscp_obspack.utils import timeit, t2dt, year_fraction
+from icoscp_obspack.utils import t2dt, timeit, year_fraction
 
 
 def plot_timeseries_station(
@@ -36,13 +35,13 @@ def plot_timeseries_station(
     time_before_filtering = datetime.now(tz=timezone.utc)
     try:
         dataset_filtered = ghg_filter_ts(dataset_no_tz['JulDate'], dataset_no_tz['Meas'])
-    except:
+    except (ValueError, TypeError):
         print(
             f'The trend and smoothed curve could not be calculated for station {station_id} at sampling'
             f' height {sampling_height}')
         dataset_filtered = pd.DataFrame(columns=['Trend', 'SmoothCurve'])
     _ = timeit(time_before_filtering, f'    Filter timeseries for station {station_id} at sampling height {sampling_height}', config.print_timing_messages)
-    station_and_height = f'{station_id} {str(int(sampling_height))}'
+    station_and_height = f'{station_id} {int(sampling_height)}'
     last_time = year_fraction(latest_measurement_dt) \
         if latest_measurement_dt is not None else year_fraction(datetime.now(tz=timezone.utc))
     fig = plt.figure(figsize=(15, 8))
@@ -172,18 +171,18 @@ def ghg_filter_ts(
 
     # Seasonal Cycle
     # x and y are original data points
-    trend = filt.getTrendValue(time)
-    detrend = meas - trend
+    #trend = filt.getTrendValue(time)
+    #detrend = meas - trend
     harmonics = filt.getHarmonicValue(x0)
     smooth_cycle = harmonics + filt.smooth - filt.trend
     # residuals from the function
-    resid_from_func = filt.resid
+    #resid_from_func = filt.resid
     # smoothed residuals
-    resid_smooth = filt.smooth
+    #resid_smooth = filt.smooth
     # trend of residuals
     resid_trend = filt.trend
     # residuals about the smoothed line
-    resid_from_smooth = filt.yp - filt.getSmoothValue(meas.index)
+    #resid_from_smooth = filt.yp - filt.getSmoothValue(meas.index)
     deriv = filt.deriv
 
     return pd.DataFrame(
