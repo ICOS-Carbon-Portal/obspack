@@ -16,7 +16,7 @@ from icoscp_core.rolemeta import Membership
 from pandas._typing import DtypeArg
 
 # Local application/library specific imports.
-from icoscp_obspack.citation import Contributor, ContributorWithWeight, citation, doi_citation
+from icoscp_obspack.citation import Author, AuthorWithWeight, citation, doi_citation
 from icoscp_obspack.config import Config
 from icoscp_obspack.data_writer import DataWriter, NetcdfFileInfoForUploader, StationExtraInfo
 from icoscp_obspack.doi import GeoLocation, GeoLocationPoint, produce_doi_meta
@@ -64,10 +64,10 @@ good_flags_per_data_type = {
 # Unique dataset ID in the obspack product.
 first_dataset_id = {'co2': 1000, 'ch4': 2000, 'n2o': 3000, 'co': 4000}
 
-# Additional contributors for specific stations.
-additional_contributors: dict[str, list[Contributor]] = {
+# Additional authors for specific stations.
+additional_authors: dict[str, list[Author]] = {
     'HFD': [
-        Contributor(
+        Author(
             uri='http://meta.icos-cp.eu/resources/people/Chris_Rennick',
             first_name='Chris',
             last_name='Rennick',
@@ -96,7 +96,7 @@ deprecated_dobjs_to_use: dict[str, dict[str, dict[float, list[str]]]] = {
 class SamplingHeightContent:
     data: pd.DataFrame
     station_meta: Station
-    contributors: list[ContributorWithWeight]
+    authors: list[AuthorWithWeight]
     citations: list[str]
     hashsums: list[str]
 
@@ -110,7 +110,7 @@ def main():
     print(f'\n\n{"_"*122}\nProcessing metadata and data...')
     collecting_info_start_time = datetime.now(tz=timezone.utc)
     content_from_all_sampling_heights: dict[str, dict[float, SamplingHeightContent]] = {}
-    contributors_to_collection: list[Contributor] = []
+    collection_authors: list[Author] = []
     geo_locations: list[GeoLocation] = []
     geo_features: list[GeoFeature] = []
     earliest_dt: datetime | None = None
@@ -129,12 +129,12 @@ def main():
             print(f'Skipping station {station.id} because it is not a ICOS level 1 or 2 station.')
             continue
         # Collect information about the staff of the station.
-        contributors_to_station: list[Contributor] = [
-            contributor_from_membership(membership) for membership in station_meta.staff]
-        if station.id in additional_contributors.keys():
-            contributors_to_station.extend(additional_contributors[station.id])
+        station_authors: list[Author] = [
+            author_from_membership(membership) for membership in station_meta.staff]
+        if station.id in additional_authors.keys():
+            station_authors.extend(additional_authors[station.id])
         persons_at_station: list[Person] = [member.person for member in station_meta.staff]
-        fetching_station_info_end_time = timeit(fetching_station_info_start_time, f'Collect metadata and contributors for station {station.id}', c.print_timing_messages)
+        fetching_station_info_end_time = timeit(fetching_station_info_start_time, f'Collect metadata and authors for station {station.id}', c.print_timing_messages)
 
         # Find all relevant data objects for a given station and separate them by sampling height.
         dobjs_per_sampling_height = dobjs_from_station_by_sampling_height(station)
@@ -188,41 +188,41 @@ def main():
             if latest_dt is None or data_at_sampling_height.index[-1] > latest_dt:
                 latest_dt = data_at_sampling_height.index[-1]
 
-            # Handle contributors and citations.
+            # Handle authors and citations.
             if station_meta.specificInfo.stationClass is None:
                 citations: list[str] = []
             else:
                 citations: list[str] = c.default_citations.copy()
-            contributors_to_file: list[Contributor] = contributors_to_station.copy()
+            file_authors: list[Author] = station_authors.copy()
             short_hashsums: list[str] = []
             for dobj in used_dobjs_at_sampling_height:
                 path_to_pkl_file = Path(c.pickle, f'{dobj.hash}.pkl')
                 if c.debug and not c.refresh_pickles:
                     with open(path_to_pkl_file, 'rb') as pkl_file:
-                        contributors_to_file: list[Contributor] = pickle.load(pkl_file)
+                        file_authors: list[Author] = pickle.load(pkl_file)
                 else:
-                    authors: list[Person] = []
+                    persons: list[Person] = []
                     if dobj.references.authors is not None:
-                        authors = [
+                        persons = [
                             author for author in dobj.references.authors
                             if isinstance(author, Person) and author not in persons_at_station]
-                    contributors_to_dobj: list[Contributor] = [
-                        contributor_from_person(person) for person in authors]
-                    contributors_to_file.extend(contributors_to_dobj)
+                    dobj_authors: list[Author] = [
+                        author_from_person(person) for person in persons]
+                    file_authors.extend(dobj_authors)
                 if c.debug and c.refresh_pickles:
                     with open(path_to_pkl_file, 'wb') as pkl_file:
-                        pickle.dump(contributors_to_file, pkl_file)
+                        pickle.dump(file_authors, pkl_file)
                 if dobj.references.citationString is not None:
                     citations.append(dobj.references.citationString)
                 short_hashsums.append(dobj.hash[:24])
-            contributors_to_file_cleaned = clean_and_sort_contributors(contributors_to_file)
-            contributors_to_collection.extend(contributors_to_file)
-            _ = timeit(combining_datasets_end_time, f'Handle contributors and citations for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
+            file_authors_cleaned = clean_and_sort_authors(file_authors)
+            collection_authors.extend(file_authors)
+            _ = timeit(combining_datasets_end_time, f'Handle authors and citations for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
 
             content_from_all_sampling_heights[station.id][sampling_height] = SamplingHeightContent(
                 data=data_at_sampling_height,
                 station_meta=station_meta,
-                contributors=contributors_to_file_cleaned,
+                authors=file_authors_cleaned,
                 citations=citations,
                 hashsums=short_hashsums)
 
@@ -256,19 +256,19 @@ def main():
         global_avg = pd.DataFrame()
         global_avg_filtered = pd.DataFrame()
 
-    # Handle contributors to the Obspack collection.
-    contributors_to_collection_cleaned = clean_and_sort_contributors(contributors_to_collection)
+    # Handle authors to the Obspack collection.
+    collection_authors_cleaned = clean_and_sort_authors(collection_authors)
     # Save JSON to be pasted in the DOI app for minting the DOI of the Obspack release.
-    produce_doi_meta(c, contributors_to_collection_cleaned, geo_locations)
-    # Save contributor and author info as json for the DOI minting.
-    # These files are not needed anymore since the JSON created in the previous step includes all information
-    # about authors and contributors, but it is kept here as legacy.
-    path_to_authors_file = Path(c.output, f'authors_{c.gas}.json')
+    produce_doi_meta(c, collection_authors_cleaned, geo_locations)
+    # Save contributor and creator info as json for the DOI minting.
+    # These files are not needed anymore since the JSON created in the previous step includes
+    # all information about creators and contributors, but it is kept here as legacy.
+    path_to_creators_file = Path(c.output, f'creators_{c.gas}.json')
     path_to_contributors_file = Path(c.output, f'contributors_{c.gas}.json')
-    with open(path_to_authors_file, 'w') as authors_file:
-        authors_file.write(citation(contributors_to_collection_cleaned, as_contrib=False))
+    with open(path_to_creators_file, 'w') as creators_file:
+        creators_file.write(citation(collection_authors_cleaned, as_contrib=False))
     with open(path_to_contributors_file, 'w') as contributors_file:
-        contributors_file.write(citation(contributors_to_collection_cleaned, as_contrib=True))
+        contributors_file.write(citation(collection_authors_cleaned, as_contrib=True))
     # Save GeoJSON of station locations. The GeoJSON can be used when uploading the Obspack release
     # to the data portal.
     geo_json = GeoJson(features=geo_features, type='FeatureCollection')
@@ -322,7 +322,7 @@ def main():
                 data_writer = DataWriter(
                     config=c, filename=filename, data=sampling_height_content.data,
                     station=sampling_height_content.station_meta, station_extra_info=station_extra_info,
-                    height=sampling_height, contributors=sampling_height_content.contributors,
+                    height=sampling_height, authors=sampling_height_content.authors,
                     citations=sampling_height_content.citations, nc_cnt=dataset_id, row_counter=row_counter,
                     hashsums=sampling_height_content.hashsums,
                     dataset_creation_data=datetime.now(tz=timezone.utc),
@@ -420,8 +420,8 @@ def dobjs_from_station_by_sampling_height(station: StationLite) -> dict[float, l
             dobjs_per_sampling_height.setdefault(h, []).extend([meta.get_dobj_meta(url) for url in urls])
     return dobjs_per_sampling_height
 
-def contributor_from_membership(membership: Membership) -> Contributor:
-    return Contributor(
+def author_from_membership(membership: Membership) -> Author:
+    return Author(
         uri=membership.person.self.uri,
         first_name=membership.person.firstName,
         last_name=membership.person.lastName,
@@ -431,8 +431,8 @@ def contributor_from_membership(membership: Membership) -> Contributor:
         end=membership.role.end
     )
 
-def contributor_from_person(person: Person) -> Contributor:
-    return Contributor(
+def author_from_person(person: Person) -> Author:
+    return Author(
         uri=person.self.uri,
         first_name=person.firstName,
         last_name=person.lastName,
@@ -442,54 +442,54 @@ def contributor_from_person(person: Person) -> Contributor:
         end=None
     )
 
-def clean_and_sort_contributors(contributors: list[Contributor]) -> list[ContributorWithWeight]:
+def clean_and_sort_authors(authors: list[Author]) -> list[AuthorWithWeight]:
     """
-    Clean and sort a list of contributors.
-    :param `contributors`:
-        A list of `Contributor`s.
+    Clean and sort a list of authors.
+    :param `authors`:
+        A list of `Author`s.
     :return:
-        A sorted list of `Contributor`s.
+        A sorted list of `Author`s.
     """
-    contributors_cleaned: list[ContributorWithWeight] = []
-    contributor_per_uri: dict[str, list[Contributor]] = {}
-    for contributor in set(contributors):
-        contributor_per_uri.setdefault(contributor.uri, []).append(contributor)
-    for contributors_with_same_uri in contributor_per_uri.values():
-        weights = [contrib.weight for contrib in contributors_with_same_uri if contrib.weight is not None]
+    authors_cleaned: list[AuthorWithWeight] = []
+    author_per_uri: dict[str, list[Author]] = {}
+    for author in set(authors):
+        author_per_uri.setdefault(author.uri, []).append(author)
+    for authors_with_same_uri in author_per_uri.values():
+        weights = [author.weight for author in authors_with_same_uri if author.weight is not None]
         max_weight = max(weights) if weights else None
-        # If there is only one instance of the contributor with this URI, keep it.
-        if len(contributors_with_same_uri) == 1:
-            contributors_cleaned.append(ContributorWithWeight.from_contributor(
-                contributors_with_same_uri[0], c.default_contributor_weight))
+        # If there is only one instance of the author with this URI, keep it.
+        if len(authors_with_same_uri) == 1:
+            authors_cleaned.append(AuthorWithWeight.from_author(
+                authors_with_same_uri[0], c.default_author_weight))
             continue
-        # If there are multiple instances of the contributor with this URI, keep the one with the latest
+        # If there are multiple instances of the author with this URI, keep the one with the latest
         # start date among those who have no end date (which indicates that it is the current information).
-        # Use the maximum weight of all instances of the contributor (if available).
-        current_contributors = [
-            contrib for contrib in contributors_with_same_uri
-            if contrib.start is not None and contrib.end is None]
-        if len(current_contributors) > 0:
-            current_contributors.sort(key=lambda contrib: contrib.start or '', reverse=True)
-            contributors_cleaned.append(ContributorWithWeight.from_contributor(
-                current_contributors[0], c.default_contributor_weight, imposed_weight=max_weight))
+        # Use the maximum weight of all instances of the author (if available).
+        current_authors = [
+            author for author in authors_with_same_uri
+            if author.start is not None and author.end is None]
+        if len(current_authors) > 0:
+            current_authors.sort(key=lambda author: author.start or '', reverse=True)
+            authors_cleaned.append(AuthorWithWeight.from_author(
+                current_authors[0], c.default_author_weight, imposed_weight=max_weight))
             continue
-        # If there is no current instance of the contributor, keep the one with the latest end date.
-        # Use the maximum weight of all instances of the contributor (if available).
-        contributors_with_end_date = [
-            contrib for contrib in contributors_with_same_uri if contrib.end is not None]
-        if len(contributors_with_end_date) > 0:
-            contributors_with_end_date.sort(key=lambda contrib: contrib.end or '', reverse=True)
-            contributors_cleaned.append(ContributorWithWeight.from_contributor(
-                contributors_with_end_date[0], c.default_contributor_weight, imposed_weight=max_weight))
+        # If there is no current instance of the author, keep the one with the latest end date.
+        # Use the maximum weight of all instances of the author (if available).
+        authors_with_end_date = [
+            author for author in authors_with_same_uri if author.end is not None]
+        if len(authors_with_end_date) > 0:
+            authors_with_end_date.sort(key=lambda author: author.end or '', reverse=True)
+            authors_cleaned.append(AuthorWithWeight.from_author(
+                authors_with_end_date[0], c.default_author_weight, imposed_weight=max_weight))
             continue
-        # If none of the instances of the contributor has an end date, keep the one with the highest weight.
+        # If none of the instances of the author has an end date, keep the one with the highest weight.
         # If none of the instances has a weight, assign the default weight.
-        contributors_with_same_uri.sort(key=lambda contrib: contrib.weight or 0, reverse=True)
-        contributors_cleaned.append(ContributorWithWeight.from_contributor(
-            contributors_with_same_uri[0], c.default_contributor_weight))
-    contributors_cleaned.sort(
-        key=lambda contributor: (-contributor.weight, contributor.last_name, contributor.first_name))
-    return contributors_cleaned
+        authors_with_same_uri.sort(key=lambda author: author.weight or 0, reverse=True)
+        authors_cleaned.append(AuthorWithWeight.from_author(
+            authors_with_same_uri[0], c.default_author_weight))
+    authors_cleaned.sort(
+        key=lambda author: (-author.weight, author.last_name, author.first_name))
+    return authors_cleaned
 
 def combine_data_files(
         dobjs: list[DataObject], station_id: str, sampling_height: float

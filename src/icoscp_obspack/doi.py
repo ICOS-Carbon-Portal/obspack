@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Literal, TypeAlias
 
 # Local application/library specific imports.
-from icoscp_obspack.citation import ContributorWithWeight
+from icoscp_obspack.citation import AuthorWithWeight
 from icoscp_obspack.config import Config
 
 Uri: TypeAlias = str
@@ -208,7 +208,7 @@ class DoiMeta:
     fundingReferences: list[FundingReference] | None = None
     geoLocations: list[GeoLocation] | None = None
 
-def produce_doi_meta(config: Config, authors: list[ContributorWithWeight], geo_locations: list[GeoLocation]) -> None:
+def produce_doi_meta(config: Config, authors: list[AuthorWithWeight], geo_locations: list[GeoLocation]) -> None:
     now = datetime.now()
     obspack_name = (
             f'obspack_{config.gas}_466_{config.obspack_product_name}_'
@@ -239,7 +239,7 @@ def produce_doi_meta(config: Config, authors: list[ContributorWithWeight], geo_l
     with open(config.doi_json_file, 'w') as doi_json_f:
         json.dump(doi_meta, doi_json_f, cls=EnhancedJSONEncoder)
 
-def _list_of_contributors(authors: list[ContributorWithWeight]) -> list[Contributor]:
+def _list_of_contributors(authors: list[AuthorWithWeight]) -> list[Contributor]:
     contributors = [_organization_to_doi_contributor('ICOS RI', 'Distributor')]
     contributors.extend([_author_to_doi_contributor(author) for author in authors])
     contributors.append(_organization_to_doi_contributor('ICOS Carbon Portal', 'DataCurator'))
@@ -249,7 +249,7 @@ def _list_of_contributors(authors: list[ContributorWithWeight]) -> list[Contribu
     contributors.append(_organization_to_doi_contributor('ICOS Central Radiocarbon Laboratory', 'DataCurator'))
     return contributors
 
-def _list_of_creators(authors: list[ContributorWithWeight]) -> list[Creator]:
+def _list_of_creators(authors: list[AuthorWithWeight]) -> list[Creator]:
     creators = [_organization_to_doi_creator('ICOS RI')]
     creators.extend([_author_to_doi_creator(author) for author in authors])
     creators.append(_organization_to_doi_creator('ICOS Carbon Portal'))
@@ -273,7 +273,7 @@ def _organization_to_doi_creator(organization_name: str) -> Creator:
         affiliation=[]
     )
 
-def _author_to_doi_contributor(author: ContributorWithWeight) -> Contributor:
+def _author_to_doi_contributor(author: AuthorWithWeight) -> Contributor:
     return Contributor(
         name=PersonalName(givenName=author.first_name, familyName=author.last_name, nameType='Personal'),
         nameIdentifiers=_orcid_name_identifiers(author.orcid),
@@ -281,7 +281,7 @@ def _author_to_doi_contributor(author: ContributorWithWeight) -> Contributor:
         contributorType='DataCollector'
     )
 
-def _author_to_doi_creator(author: ContributorWithWeight) -> Creator:
+def _author_to_doi_creator(author: AuthorWithWeight) -> Creator:
     return Creator(
         name=PersonalName(givenName=author.first_name, familyName=author.last_name, nameType='Personal'),
         nameIdentifiers=_orcid_name_identifiers(author.orcid),

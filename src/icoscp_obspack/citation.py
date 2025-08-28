@@ -8,7 +8,7 @@ from requests.structures import CaseInsensitiveDict
 
 
 @dataclass(frozen=True)
-class Contributor:
+class Author:
     uri: str
     first_name: str
     last_name: str
@@ -18,24 +18,24 @@ class Contributor:
     end: str | None
 
 @dataclass(frozen=True)
-class ContributorWithWeight(Contributor):
+class AuthorWithWeight(Author):
     weight: int
     @classmethod
-    def from_contributor(
-        cls, contributor: Contributor, default_weight: int = 0, imposed_weight: int | None = None) \
-    -> 'ContributorWithWeight':
-        return ContributorWithWeight(
-            uri=contributor.uri,
-            first_name=contributor.first_name,
-            last_name=contributor.last_name,
-            orcid=contributor.orcid,
-            weight=imposed_weight or contributor.weight or default_weight,
-            start=contributor.start,
-            end=contributor.end
+    def from_author(
+        cls, author: Author, default_weight: int = 0, imposed_weight: int | None = None) \
+    -> 'AuthorWithWeight':
+        return AuthorWithWeight(
+            uri=author.uri,
+            first_name=author.first_name,
+            last_name=author.last_name,
+            orcid=author.orcid,
+            weight=imposed_weight or author.weight or default_weight,
+            start=author.start,
+            end=author.end
         )
 
 
-def citation(contributors: list[ContributorWithWeight], as_contrib: bool = False) -> str:
+def citation(authors: list[AuthorWithWeight], as_contrib: bool = False) -> str:
     """Return the formatted citation json."""
     data_col = 'DataCollector' if as_contrib else ''
     data_cur = 'DataCurator' if as_contrib else ''
@@ -44,12 +44,12 @@ def citation(contributors: list[ContributorWithWeight], as_contrib: bool = False
     s = '"contributors": [' if as_contrib else '"creators": ['
 
     s = s + _inst_dcite_json('ICOS RI', data_dist)
-    for contributor in contributors:
-        if contributor.weight > 0:
+    for author in authors:
+        if author.weight > 0:
             p_json = _p_dcite_json(
-                first_name=contributor.first_name,
-                last_name=contributor.last_name,
-                orcid=contributor.orcid,
+                first_name=author.first_name,
+                last_name=author.last_name,
+                orcid=author.orcid,
                 contrib_type=data_col)
             s = s + ',' + p_json
     s = s + ',' + _inst_dcite_json('ICOS Carbon Portal', data_cur)

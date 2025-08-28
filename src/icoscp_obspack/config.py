@@ -52,7 +52,7 @@ class YamlConfig:
     lab_numbers: Optional[str]
     icos_stations: Optional[str]
     header: Optional[str]
-    default_contributor_weight: Optional[int]
+    default_author_weight: Optional[int]
     print_timing_messages: Optional[bool]
 
 
@@ -148,7 +148,7 @@ class Config:
             self.plot_unit_label = '[nmol/mol]'
             self.plot_limy = [0, 600]
 
-        self.default_contributor_weight: int = self._value_with_default(config.default_contributor_weight, 0)
+        self.default_author_weight: int = self._value_with_default(config.default_author_weight, 0)
         self.print_timing_messages: bool = self._value_with_default(config.print_timing_messages, False)
 
     def _value_with_default(self, val: Any, default: Any) -> Any:

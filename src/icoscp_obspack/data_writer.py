@@ -15,7 +15,7 @@ from icoscp_core.metacore import Station
 from icoscp_core.sparql import BoundUri, SparqlResults
 
 # Local application/library specific imports.
-from icoscp_obspack.citation import ContributorWithWeight
+from icoscp_obspack.citation import AuthorWithWeight
 from icoscp_obspack.config import Config
 from icoscp_obspack.utils import extract_temporal_components, get_hash_sum, timeit, year_fraction
 
@@ -44,7 +44,7 @@ class DataWriter:
     def __init__(
             self, config: Config, filename: str, data: pd.DataFrame,
             station: Station, station_extra_info: StationExtraInfo, height: float,
-            contributors: list[ContributorWithWeight], citations: list[str],
+            authors: list[AuthorWithWeight], citations: list[str],
             nc_cnt: int, row_counter: int, hashsums: list[str],
             dataset_creation_data: dt.datetime, obspack_creation_date: str,
             obspack_name: str, obspack_citation: str) -> None:
@@ -58,9 +58,9 @@ class DataWriter:
         self.height = height
         self.station = station
         self.station_extra_info = station_extra_info
-        self.contributor_uris = [contributor.uri for contributor in contributors]
+        self.author_uris = [author.uri for author in authors]
         self.persons = ' AND '.join([
-            f'{contributor.first_name} {contributor.last_name}' for contributor in contributors])
+            f'{author.first_name} {author.last_name}' for author in authors])
         self.citations = citations
         self.nc_cnt = nc_cnt
         self.hashsums = hashsums
@@ -587,7 +587,7 @@ class DataWriter:
                 "samplingHeight": self.height,
                 "production": {
                     "creator": "http://meta.icos-cp.eu/resources/organizations/CP",
-                    "contributors": self.contributor_uris,
+                    "contributors": self.author_uris,
                     "hostOrganization": "http://meta.icos-cp.eu/resources/organizations/CP",
                     "comment": (
                         "European Obspack observational timeseries in netcdf format of ambient mole"

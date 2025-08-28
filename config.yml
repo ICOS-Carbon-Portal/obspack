@@ -44,5 +44,5 @@ use_flags: True
 lab_numbers:
 icos_stations:
 header:
-default_contributor_weight:
+default_author_weight:
 print_timing_messages: false
