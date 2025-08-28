@@ -68,7 +68,7 @@ first_dataset_id = {'co2': 1000, 'ch4': 2000, 'n2o': 3000, 'co': 4000}
 additional_contributors: dict[str, list[Contributor]] = {
     'HFD': [
         Contributor(
-            uri='http://meta.icos-cp.eu/resources/people/chris_rennick',
+            uri='http://meta.icos-cp.eu/resources/people/Chris_Rennick',
             first_name='Chris',
             last_name='Rennick',
             orcid='0000-0003-4993-0156',

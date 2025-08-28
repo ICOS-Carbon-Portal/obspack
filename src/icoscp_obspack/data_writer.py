@@ -198,9 +198,9 @@ class DataWriter:
         self.netcdf_dataset['intake_height'].comment = \
             'Sample intake height in meters above ground level (magl)'
 
-        self.netcdf_dataset.createVariable('qcflag', 'c', ('time',), fill_value='-', zlib=True)
-        self.netcdf_dataset['qcflag'].long_name = 'quality_control_flag'
-        self.netcdf_dataset['qcflag'].comment = (
+        self.netcdf_dataset.createVariable('qc_flag', 'c', ('time',), fill_value='-', zlib=True)
+        self.netcdf_dataset['qc_flag'].long_name = 'quality_control_flag'
+        self.netcdf_dataset['qc_flag'].comment = (
             '- Flag U = data correct before manual quality control - Flag O = data correct after manual'
             ' quality control, other flags denote incorrect data. Data processing at ICOS ATC is described'
             ' in [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
@@ -233,10 +233,10 @@ class DataWriter:
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
 
-        self.netcdf_dataset.createVariable('icos_CMR', 'f4', ('time',), fill_value=np.nan, zlib=True)
-        self.netcdf_dataset['icos_CMR'].long_name = 'icos_continuous_measurement_repeatability'
-        self.netcdf_dataset['icos_CMR'].units = 'mol mol-1'
-        self.netcdf_dataset['icos_CMR'].comment = (
+        self.netcdf_dataset.createVariable('icos_SMR', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset['icos_SMR'].long_name = 'icos_continuous_measurement_repeatability'
+        self.netcdf_dataset['icos_SMR'].units = 'mol mol-1'
+        self.netcdf_dataset['icos_SMR'].comment = (
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
 
@@ -454,10 +454,10 @@ class DataWriter:
             if self.station.location is not None and self.station.location.alt is not None
             else np.nan)
         variables['intake_height'] = self.height
-        variables['qcflag'] = self.data['Flag'].array
+        variables['qc_flag'] = self.data['Flag'].array
         variables['icos_datalevel'] = self.data['Level'].array
         variables['icos_LTR'] = self.data['LTR'].array if 'LTR' in self.data.columns else np.zeros(self.data.shape[0])*np.nan
-        variables['icos_CMR'] = self.data['CMR'].array if 'CMR' in self.data.columns else np.zeros(self.data.shape[0])*np.nan
+        variables['icos_SMR'] = self.data['CMR'].array if 'CMR' in self.data.columns else np.zeros(self.data.shape[0])*np.nan
         variables['icos_STTB'] = self.data['STTB'].array if 'STTB' in self.data.columns else np.zeros(self.data.shape[0])*np.nan
         variables['quality_id'] = self.data['QualityId'].array
         variables['instrument'] = self.data['InstrumentId'].array if 'InstrumentId' in self.data.columns else -1
@@ -475,7 +475,7 @@ class DataWriter:
             if variable in ['datetime', 'obspack_id']:
                 self.netcdf_dataset[variable][:] = netCDF4.stringtochar(
                     np.array(values, dtype=string_dtypes[variable]))
-            elif variable in ['value', 'value_std_dev', 'icos_LTR', 'icos_CMR', 'icos_STTB']:
+            elif variable in ['value', 'value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB']:
                 new_values = values*self.config.conversion_factor
                 new_values[new_values < 0] = np.nan
                 self.netcdf_dataset[variable][:] = new_values
@@ -487,7 +487,7 @@ class DataWriter:
         order_of_variables = [
             'datetime', 'year', 'month', 'day', 'hour', 'minute', 'second',
             'time', 'start_time', 'time_decimal', 'value', 'value_std_dev', 'nvalue',
-            'qcflag', 'icos_datalevel', 'icos_LTR', 'icos_CMR', 'icos_STTB', 'quality_id', 'instrument',
+            'qc_flag', 'icos_datalevel', 'icos_LTR', 'icos_SMR', 'icos_STTB', 'quality_id', 'instrument',
             'latitude', 'longitude', 'altitude', 'intake_height', 'obs_num', 'obspack_num', 'obspack_id'
         ]
         index: pd.DatetimeIndex = self.data.index
@@ -576,7 +576,9 @@ class DataWriter:
         else:
             obj_spec = ''
 
-        return {
+        hashsum_of_previous_version = get_prev_by_name(filename=self.path_to_netcdf_file.name)
+
+        metadata_for_upload: dict[str, Any] = {
             "submitterId": "CP",
             "hashSum": get_hash_sum(path=self.path_to_netcdf_file),
             "fileName": self.path_to_netcdf_file.name,
@@ -597,7 +599,6 @@ class DataWriter:
                 }
             },
             "objectSpecification": obj_spec,
-            "isNextVersionOf": [get_prev_by_name(filename=self.path_to_netcdf_file.name)],
             "preExistingDoi": self.config.doi,
             "references": {
                 "autodeprecateSameFilenameObjects": True,
@@ -606,8 +607,13 @@ class DataWriter:
             }
         }
 
+        if hashsum_of_previous_version is not None:
+            metadata_for_upload["isNextVersionOf"] = [hashsum_of_previous_version]
 
-def get_prev_by_name(filename: str) -> str:
+        return metadata_for_upload
+
+
+def get_prev_by_name(filename: str) -> str | None:
     query = f"""
     PREFIX cpmeta: <http://meta.icos-cp.eu/ontologies/cpmeta/>
     SELECT ?dobj
@@ -632,4 +638,4 @@ def get_prev_by_name(filename: str) -> str:
         return prev_uri.split('/')[-1]
     else:
         print(f'No previous version found for data object of file "{filename}".')
-        return ''
+        return None
