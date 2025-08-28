@@ -32,6 +32,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install hatch
-      # Step 4: Run tests
-      - name: Run tests
+      # Step 4: Run linter
+      - name: Run linter
         run: hatch run lint:lint
+      # Step 5: Run tests
+      - name: Run tests
+        run: hatch run test:test
