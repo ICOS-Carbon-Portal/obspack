@@ -79,7 +79,7 @@ additional_authors: dict[str, list[Author]] = {
 }
 
 # Sampling heights to skip for some stations.
-sampling_heights_to_skip: dict[str, list[float]] = {'JFJ': [5]}
+sampling_heights_to_skip: dict[str, list[float]] = {'BIR': [2.5], 'JFJ': [5]}
 
 # Data objects that are deprecated but should be included for some stations and sampling heights.
 deprecated_dobjs_to_use: dict[str, dict[str, dict[float, list[str]]]] = {
@@ -627,7 +627,7 @@ def get_dataset(dobj: DataObject) -> pd.DataFrame:
         zf.close()
         dataset = _read_data_from_csv_without_headers(buffer, dtype={'OriginalFlag': 'object'})
     else:
-        buffer = BytesIO(open(path_to_file.name, 'rb').read())
+        buffer = BytesIO(open(path_to_file, 'rb').read())
         dataset = _read_data_from_csv_without_headers(buffer)
     buffer.close()
 
@@ -648,7 +648,7 @@ def _read_data_from_csv_without_headers(
         A pandas DataFrame with the data from the CSV file.
     """
     line = b"#"
-    while line != b"#\n":
+    while line not in {b"#\n", b"#\r\n", b""}:
         line = buffer.readline()
     columns = buffer.readline().decode('utf-8').strip('#\n').split(';')
     return pd.read_table(buffer, delimiter=';', names=columns, dtype=dtype)
