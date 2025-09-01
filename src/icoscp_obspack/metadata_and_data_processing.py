@@ -103,11 +103,12 @@ class SamplingHeightContent:
 def main():
     if c.gas not in ['co2', 'ch4', 'n2o', 'co']:
         raise ValueError(f"Invalid gas: {c.gas}.\nPossible values are 'co2', 'ch4', 'n2o', 'co'.")
-    if c.debug:
-        print(f'Running obspack for gas: "{c.gas}" in debug mode...')
-    else:
-        print(f'Running obspack for gas: "{c.gas}" in normal mode...')
-    print(f'\n\n{"_"*122}\nProcessing metadata and data...')
+    print(
+        f'Running ObsPack application for gas "{c.gas}"...'
+        f'\nObsPack product name: obspack_{c.gas}_466_{c.obspack_product_name}_{c.obspack_product_version}'
+        f'\nTitle for DOI: {c.title_for_doi}'
+        f'\nDescription for DOI: {c.description_for_doi}'
+        f'\n\n{"_"*122}\nProcessing metadata and data...')
     collecting_info_start_time = datetime.now(tz=timezone.utc)
     content_from_all_sampling_heights: dict[str, dict[float, SamplingHeightContent]] = {}
     collection_authors: list[Author] = []

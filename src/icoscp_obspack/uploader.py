@@ -1,11 +1,11 @@
 # Standard library imports.
+import os
 import sys
 from http import HTTPStatus
 from http.cookiejar import CookieJar
 from pathlib import Path
 
 # Related third party imports.
-import pandas as pd
 import requests
 from icoscp_core.icos import auth
 
@@ -15,12 +15,11 @@ from icoscp_obspack.config import Config
 
 def main():
     config = Config()
-    produced = pd.read_csv(config.info_about_produced_files)
     cookies = get_cookie_jar()
     collection: list[str] = []
-    for _, row in produced.iterrows():
-        json_file_path = Path(config.json, f"{row['filename']}.json")
-        data_file_path = Path(config.nc, f"{row['filename']}.nc")
+    for filename in os.listdir(config.nc):
+        json_file_path = Path(config.json, filename.replace('.nc', '.json'))
+        data_file_path = Path(config.nc, filename)
         print(json_file_path)
         # Upload metadata.
         upload_meta_resp = requests.post(

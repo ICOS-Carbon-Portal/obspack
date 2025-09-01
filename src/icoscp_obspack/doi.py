@@ -237,7 +237,7 @@ def produce_doi_meta(config: Config, authors: list[AuthorWithWeight], geo_locati
         geoLocations=geo_locations
     )
     with open(config.doi_json_file, 'w') as doi_json_f:
-        json.dump(doi_meta, doi_json_f, cls=EnhancedJSONEncoder)
+        json.dump(doi_meta, doi_json_f, cls=EnhancedJSONEncoder, indent=2)
 
 def _list_of_contributors(authors: list[AuthorWithWeight]) -> list[Contributor]:
     contributors = [_organization_to_doi_contributor('ICOS RI', 'Distributor')]
