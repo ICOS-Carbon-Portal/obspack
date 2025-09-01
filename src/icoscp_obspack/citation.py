@@ -1,6 +1,5 @@
 # Standard library imports.
 from dataclasses import dataclass
-from typing import Optional
 
 # Related third party imports.
 import requests
@@ -62,7 +61,7 @@ def citation(authors: list[AuthorWithWeight], as_contrib: bool = False) -> str:
     return s
 
 
-def _inst_dcite_json(name: str, contrib_type: Optional[str] = None) -> str:
+def _inst_dcite_json(name: str, contrib_type: str | None = None) -> str:
     """Return the formatted institute datacite json."""
     s = '  {\n  "name" : {\n    "name" : "'+name+'",\n'
     s = s + '    "nameType" : "Organizational"\n  },\n'
@@ -75,8 +74,8 @@ def _inst_dcite_json(name: str, contrib_type: Optional[str] = None) -> str:
 
 
 def _p_dcite_json(
-        first_name: str, last_name: str, orcid: Optional[str] = None,
-        affiliation: Optional[str] = None, contrib_type: Optional[str] = None) -> str:
+        first_name: str, last_name: str, orcid: str | None = None,
+        affiliation: str | None = None, contrib_type: str | None = None) -> str:
     """Return the formatted person datacite json."""
     s = ('  {\n  "name" : {\n    "familyName" : "' + last_name + '",\n' +
          '    "givenName" : "' + first_name + '",\n' +

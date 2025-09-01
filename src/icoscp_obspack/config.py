@@ -1,7 +1,7 @@
 # Standard library imports.
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 # Related third party imports.
 import yaml
@@ -18,42 +18,42 @@ class YamlConfig:
     doi: str
     dois_for_default_citations: list[str]
     obspack_product_name: str
-    obspack_product_version: Optional[str]
+    obspack_product_version: str | None
     major_version_for_doi: int
     minor_version_for_doi: int
     title_for_doi: str
     description_for_doi: str
     subjects_for_doi: list[str]
-    publisher_for_doi: Optional[str]
-    resource_type_for_doi: Optional[str]
-    format_info_for_doi: Optional[str]
-    rights_for_doi: Optional[str]
-    rights_uri_for_doi: Optional[str]
-    input: Optional[str]
-    output: Optional[str]
-    doi_json_file: Optional[str]
-    info_about_produced_files: Optional[str]
-    nc: Optional[str]
-    json: Optional[str]
-    txt: Optional[str]
-    png: Optional[str]
-    pickle: Optional[str]
-    zip: Optional[str]
-    use_only_icos_stations_l1_or_l2: Optional[bool]
-    use_cached_datafiles: Optional[bool]
-    analyse: Optional[bool]
-    do_png: Optional[bool]
-    display_plots: Optional[bool]
-    do_txt: Optional[bool]
-    debug: Optional[bool]
-    refresh_pickles: Optional[bool]
-    use_mauna_loa_for_global_co2: Optional[bool]
-    use_flags: Optional[bool]
-    lab_numbers: Optional[str]
-    icos_stations: Optional[str]
-    header: Optional[str]
-    default_author_weight: Optional[int]
-    print_timing_messages: Optional[bool]
+    publisher_for_doi: str | None
+    resource_type_for_doi: str | None
+    format_info_for_doi: str | None
+    rights_for_doi: str | None
+    rights_uri_for_doi: str | None
+    input: str | None
+    output: str | None
+    doi_json_file: str | None
+    info_about_produced_files: str | None
+    nc: str | None
+    json: str | None
+    txt: str | None
+    png: str | None
+    pickle: str | None
+    zip: str | None
+    use_only_icos_stations_l1_or_l2: bool | None
+    use_cached_datafiles: bool | None
+    analyse: bool | None
+    do_png: bool | None
+    display_plots: bool | None
+    do_txt: bool | None
+    debug: bool | None
+    refresh_pickles: bool | None
+    use_mauna_loa_for_global_co2: bool | None
+    use_flags: bool | None
+    lab_numbers: str | None
+    icos_stations: str | None
+    header: str | None
+    default_author_weight: int | None
+    print_timing_messages: bool | None
 
 
 class Config:
@@ -158,8 +158,8 @@ class Config:
             return val
 
     def _init_path(
-            self, default_path: Path, user_specified_path: Optional[str],
-            path_type: Optional[Literal["dir", "file"]] = "dir") -> Path:
+            self, default_path: Path, user_specified_path: str | None,
+            path_type: Literal["dir", "file"] | None = "dir") -> Path:
         """Initialize the path to a newly produced file or an application directory
         to store newly produced files."""
         path = default_path if user_specified_path is None else Path(user_specified_path)
