@@ -1,103 +1,169 @@
 # Standard library imports.
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from urllib.error import HTTPError, URLError
+from typing import Any, Literal
 
 # Related third party imports.
-import pandas as pd
 import yaml
 
 # Local application/library specific imports.
-from icoscp_obspack.constants import yaml as y
-from icoscp_obspack.utils import t2dt
+from icoscp_obspack.citation import doi_citation
+
+YAML_CONFIG = '../config.yml'
 
 
 @dataclass()
 class YamlConfig:
     gas: str
     doi: str
-    analyse: bool
-    plot: bool
-    output: str
-    nc: str
-    json: str
-    txt: str
-    png: str
+    dois_for_default_citations: list[str]
+    obspack_product_name: str
+    obspack_product_version: str | None
+    major_version_for_doi: int
+    minor_version_for_doi: int
+    title_for_doi: str
+    description_for_doi: str
+    subjects_for_doi: list[str]
+    publisher_for_doi: str | None
+    resource_type_for_doi: str | None
+    format_info_for_doi: str | None
+    rights_for_doi: str | None
+    rights_uri_for_doi: str | None
+    input: str | None
+    output: str | None
+    doi_json_file: str | None
+    info_about_produced_files: str | None
+    nc: str | None
+    json: str | None
+    txt: str | None
+    png: str | None
     pickle: str | None
     zip: str | None
-    lab_numbers: str | pd.DataFrame = 'input/lab_numbers.csv'
-    icos_stations: str | pd.DataFrame = 'input/icos_stations.csv'
-    header: str = 'input/header.txt'
-    glob_aver: pd.DataFrame = None
-    file_contribs: pd.DataFrame = field(default_factory=pd.DataFrame)
-    col_contribs: pd.DataFrame = field(default_factory=pd.DataFrame)
-    d_files: list = None
-    mauna_loa: str | None = None
-    ml: str | None = None
-    glb_avg_ch4: str | None = None
-    do_png: bool = True
-    do_txt: bool = True
-    debug: bool = True
-    meta_info: pd.DataFrame = field(default_factory=pd.DataFrame)
-    refresh_pickles: bool = False
-    produced: pd.DataFrame = field(default_factory=pd.DataFrame)
+    use_only_icos_stations_l1_or_l2: bool | None
+    use_cached_datafiles: bool | None
+    analyse: bool | None
+    do_png: bool | None
+    display_plots: bool | None
+    do_txt: bool | None
+    debug: bool | None
+    refresh_pickles: bool | None
+    use_mauna_loa_for_global_co2: bool | None
+    use_flags: bool | None
+    lab_numbers: str | None
+    icos_stations: str | None
+    header: str | None
+    default_author_weight: int | None
+    print_timing_messages: bool | None
 
 
 class Config:
-
     def __init__(self) -> None:
-        self.c = self.read_config()
-        self.c.output = self.c.output if self.c.output else Path('output', self.c.gas)
-        self.c.nc = self.c.nc if self.c.nc else Path(self.c.output, 'nc-files')
-        self.c.json = self.c.json if self.c.json else Path(self.c.output, 'json-files')
-        self.c.txt = self.c.txt if self.c.txt else Path(self.c.output, 'txt-files')
-        self.c.png = self.c.png if self.c.png else Path(self.c.output, 'png-files')
-        self.c.pickle = self.c.pickle if self.c.pickle else Path(self.c.output, 'pickle-files')
-        self.c.zip = self.c.zip if self.c.zip else Path(self.c.output, 'zip-files')
-        self.init_dirs()
-        self.c.mauna_loa = Path(self.c.output, 'mauna_loa.csv')
-        self.c.ml = Path(self.c.output, 'ml.csv')
-        self.c.glb_avg_ch4 = Path(self.c.output, 'glb_avg_ch4.csv')
-        self.c.lab_numbers = pd.read_csv(self.c.lab_numbers, comment='#', delimiter=';')
-        self.c.icos_stations = pd.read_csv(self.c.icos_stations, comment='#', delimiter=';')
-        self.c.glob_aver = self.get_global_average()
-        if self.c.debug:
-            print(f'Running obspack for gas: "{self.c.gas}" in debug mode...')
-            print('-------------')
+        with open(YAML_CONFIG) as yaml_handler:
+            config = YamlConfig(**yaml.safe_load(yaml_handler))
 
-    @staticmethod
-    def read_config() -> YamlConfig:
-        with open(y.YAML_CONFIG) as yaml_handler:
-            return YamlConfig(**yaml.safe_load(yaml_handler))
+        self.gas: str = config.gas
+        self.doi: str = config.doi
+        self.default_citations: list[str] = [doi_citation(doi) for doi in config.dois_for_default_citations]
+        self.obspack_product_name: str = config.obspack_product_name
+        self.obspack_product_version: str = self._value_with_default(
+            config.obspack_product_version,
+            f'v{config.major_version_for_doi}.{config.minor_version_for_doi}')
+        self.major_version_for_doi: int = config.major_version_for_doi
+        self.minor_version_for_doi: int = config.minor_version_for_doi
+        self.title_for_doi: str = config.title_for_doi
+        self.description_for_doi: str = config.description_for_doi
+        self.subjects_for_doi: list[str] = config.subjects_for_doi
+        self.publisher_for_doi: str = self._value_with_default(
+            config.publisher_for_doi, 'ICOS ERIC - Carbon Portal')
+        self.resource_type_for_doi: str = self._value_with_default(
+            config.resource_type_for_doi, 'compressed ZIP archive')
+        self.format_info_for_doi: str = self._value_with_default(
+            config.format_info_for_doi, (
+                'Compressed ZIP archive of netcdf and ASCII files with semicolon separated columns.'
+                ' Overview pictures of recent data and trend plots since 2010 are provided as bitmaps'
+                ' in png format.')
+            )
+        self.rights_for_doi: str = self._value_with_default(
+            config.rights_for_doi, 'Creative Commons Attribution 4.0 International')
+        self.rights_uri_for_doi: str = self._value_with_default(
+            config.rights_uri_for_doi, 'https://creativecommons.org/licenses/by/4.0/legalcode')
 
-    def init_dirs(self) -> None:
-        """Create the needed application directories."""
-        Path(self.c.output).mkdir(parents=True, exist_ok=True)
-        Path(self.c.nc).mkdir(parents=True, exist_ok=True)
-        Path(self.c.json).mkdir(parents=True, exist_ok=True)
-        Path(self.c.txt).mkdir(parents=True, exist_ok=True)
-        Path(self.c.png).mkdir(parents=True, exist_ok=True)
-        Path(self.c.pickle).mkdir(parents=True, exist_ok=True)
-        Path(self.c.zip).mkdir(parents=True, exist_ok=True)
+        self.use_only_icos_stations_l1_or_l2: bool = self._value_with_default(
+            config.use_only_icos_stations_l1_or_l2, True)
+        self.use_cached_datafiles: bool = self._value_with_default(config.use_cached_datafiles, False)
+        self.analyse: bool = self._value_with_default(config.analyse, True)
+        self.do_png: bool = self._value_with_default(config.do_png, True)
+        self.display_plots: bool = self._value_with_default(config.display_plots, False)
+        self.do_txt: bool = self._value_with_default(config.do_txt, True)
+        self.debug: bool = self._value_with_default(config.debug, False)
+        self.refresh_pickles: bool = self._value_with_default(config.refresh_pickles, False)
+        self.use_mauna_loa_for_global_co2: bool = self._value_with_default(
+            config.use_mauna_loa_for_global_co2, False)
+        self.useflags: bool = self._value_with_default(config.use_flags, True)
 
-    def get_global_average(self) -> pd.DataFrame:
-        skip_rows = 58 if self.c.gas == 'co2' else 65
-        url = f'https://gml.noaa.gov/webdata/ccgg/trends/{self.c.gas}/{self.c.gas}_mm_gl.txt'
-        global_aver_path = Path(self.c.output, f'{self.c.gas}_mm_gl.txt')
-        try:
-            global_aver = pd.read_csv(url, skiprows=skip_rows, header=None,
-                                      names=['JulDate', 'Meas', 'Trend'],
-                                      delimiter=r'\s+', usecols=[2, 3, 5])
-        except (HTTPError, URLError) as e:
-            print(f'HTTP or URL error occurred: {e}')
-            print(f'Trying cache in "{global_aver_path}"')
-            global_aver = pd.read_csv(global_aver_path)
-        except Exception as e:
-            print(f'Unexpected error: {e}')
-            raise e
+        self.input: Path = self._init_path(Path('input'), config.input)
+        self.output: Path = self._init_path(Path('output', config.gas), config.output)
+        self.doi_json_file: Path = self._init_path(
+            Path(self.output, f'doi_json_{config.gas}.json'), config.doi_json_file, 'file')
+        self.info_about_produced_files: Path = self._init_path(
+            Path(self.output, f'info_about_produced_files_for_{config.gas}.csv'),
+            config.info_about_produced_files, 'file')
+        self.nc: Path = self._init_path(Path(self.output, 'nc'), config.nc)
+        self.json: Path = self._init_path(Path(self.output, 'json'), config.json)
+        self.txt: Path = self._init_path(Path(self.output, 'txt'), config.txt)
+        self.png: Path = self._init_path(Path(self.output, 'png'), config.png)
+        self.pickle: Path = self._init_path(Path(self.output, 'pickle'), config.pickle)
+        self.zip: Path = self._init_path(Path(self.output, 'zip'), config.zip)
+
+        self.header: Path = self._init_path(Path(self.input, 'header.txt'), config.header, 'file')
+        self.file_lab_numbers: Path = self._init_path(
+            Path(self.input, 'lab_numbers.csv'), config.lab_numbers, 'file')
+        self.file_icos_stations: Path = self._init_path(
+            Path(self.input, 'icos_stations.csv'), config.icos_stations, 'file')
+
+        self.conversion_factor: float
+        self.calibration_scale: str
+        if config.gas == 'co2':
+            self.conversion_factor = 1e-6
+            self.calibration_scale = 'WMO CO2 X2019'
+            self.plot_gas_label = 'CO${_2}$'
+            self.plot_unit_label = '[µmol/mol]'
+            self.plot_limy = [380, 460]
+        elif config.gas == 'ch4':
+            self.conversion_factor = 1e-9
+            self.calibration_scale = 'WMO X2004A'
+            self.plot_gas_label = 'CH${_4}$'
+            self.plot_unit_label = '[nmol/mol]'
+            self.plot_limy = [1800, 2500]
+        elif config.gas == 'n2o':
+            self.conversion_factor = 1e-9
+            self.calibration_scale = 'NOAA-2006A'
+            self.plot_gas_label = 'N${_2}$O'
+            self.plot_unit_label = '[nmol/mol]'
+            self.plot_limy = [315, 370]
+        elif config.gas == 'co':
+            self.conversion_factor = 1e-9
+            self.calibration_scale = 'WMO X2014A'
+            self.plot_gas_label = 'CO'
+            self.plot_unit_label = '[nmol/mol]'
+            self.plot_limy = [0, 600]
+
+        self.default_author_weight: int = self._value_with_default(config.default_author_weight, 0)
+        self.print_timing_messages: bool = self._value_with_default(config.print_timing_messages, False)
+
+    def _value_with_default(self, val: Any, default: Any) -> Any:
+        if val is None:
+            return default
         else:
-            global_aver = global_aver.query('Meas>20')
-            global_aver['DateTime'] = [t2dt(i) for i in global_aver.JulDate]
-            global_aver.set_index('DateTime', inplace=True)
-            global_aver.to_csv(f'{self.c.output}/{self.c.gas}_mm_gl.txt')
-        return global_aver
+            return val
+
+    def _init_path(
+            self, default_path: Path, user_specified_path: str | None,
+            path_type: Literal["dir", "file"] | None = "dir") -> Path:
+        """Initialize the path to a newly produced file or an application directory
+        to store newly produced files."""
+        path = default_path if user_specified_path is None else Path(user_specified_path)
+        if path_type == "dir" and not path.exists():
+            path.mkdir(parents=True)
+            print(f"Created directory '{path}'")
+        return path
