@@ -17,7 +17,7 @@ def main():
     config = Config()
     cookies = get_cookie_jar()
     collection: list[str] = []
-    for filename in os.listdir(config.nc):
+    for filename in sorted(os.listdir(config.nc)):
         json_file_path = Path(config.json, filename.replace('.nc', '.json'))
         data_file_path = Path(config.nc, filename)
         print(json_file_path)
@@ -48,7 +48,7 @@ def main():
             # Todo: correctly try-except the http request.
             print(upload_data_resp.text)
             sys.exit('Something went wrong when uploading data. The application will now exit.')
-    with open(f'output/{config.gas}_collection.txt', 'w') as f_handle:
+    with open(Path(config.output, f'{config.gas}_collection.txt', 'w')) as f_handle:
         for item in collection:
             f_handle.write(f'{item}\n')
 
