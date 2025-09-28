@@ -477,7 +477,8 @@ class DataWriter:
                     np.array(values, dtype=string_dtypes[variable]))
             elif variable in ['value', 'value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB']:
                 new_values = values*self.config.conversion_factor
-                new_values[new_values < 0] = np.nan
+                if variable != 'icos_STTB':
+                    new_values[new_values < 0] = np.nan
                 self.netcdf_dataset[variable][:] = new_values
             else:
                 self.netcdf_dataset[variable][:] = values
