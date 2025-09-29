@@ -20,7 +20,8 @@ from icoscp_obspack.citation import Author, AuthorWithWeight, citation, doi_cita
 from icoscp_obspack.config import Config
 from icoscp_obspack.data_writer import DataWriter, NetcdfFileInfoForUploader, StationExtraInfo
 from icoscp_obspack.doi import GeoLocation, GeoLocationPoint, produce_doi_meta
-from icoscp_obspack.geo_json import GeoFeature, GeoJson, Geometry, GeoProperties, produce_geo_json
+from icoscp_obspack.geo_json import (
+	GeoFeature, GeoJson, Geometry, GeoProperties, save_geo_json, save_geo_json_pickle)
 from icoscp_obspack.plotting import get_global_average, ghg_filter_ts, plot_timeseries_station
 from icoscp_obspack.utils import timeit
 
@@ -259,6 +260,8 @@ def main():
 
     # Handle authors to the Obspack collection.
     collection_authors_cleaned = clean_and_sort_authors(collection_authors)
+    with open(Path(c.output, f'authors_{c.gas}.pkl'), 'wb') as authors_file:
+        pickle.dump(collection_authors_cleaned, authors_file)
     # Save JSON to be pasted in the DOI app for minting the DOI of the Obspack release.
     produce_doi_meta(c, collection_authors_cleaned, geo_locations)
     # Save contributor and creator info as json for the DOI minting.
@@ -273,7 +276,8 @@ def main():
     # Save GeoJSON of station locations. The GeoJSON can be used when uploading the Obspack release
     # to the data portal.
     geo_json = GeoJson(features=geo_features, type='FeatureCollection')
-    produce_geo_json(geo_json, Path(c.output, f'GeoJSON_{c.gas}.json'))
+    save_geo_json(geo_json, Path(c.output, f'GeoJSON_{c.gas}.json'))
+    save_geo_json_pickle(geo_json, Path(c.output, f'GeoJSON_{c.gas}.pkl'))
     # Wait for the DOI to be minted before continuing
     user_input = None
     while user_input is None:

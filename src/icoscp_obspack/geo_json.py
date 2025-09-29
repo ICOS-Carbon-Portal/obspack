@@ -1,5 +1,6 @@
 # Standard library imports.
 import json
+import pickle
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeAlias
@@ -31,6 +32,10 @@ class GeoJson:
     features: list[GeoFeature]
     type: GeoJsonType
 
-def produce_geo_json(geo_json: GeoJson, path_to_file: Path):
+def save_geo_json(geo_json: GeoJson, path_to_file: Path):
     with open(path_to_file, 'w') as geo_json_f:
         json.dump(geo_json, geo_json_f, cls=EnhancedJSONEncoder)
+
+def save_geo_json_pickle(geo_json: GeoJson, path_to_file: Path):
+    with open(path_to_file, 'wb') as geo_json_pkl_f:
+        pickle.dump(geo_json, geo_json_pkl_f)
