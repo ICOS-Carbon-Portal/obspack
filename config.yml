@@ -1,11 +1,13 @@
 gas: 'co'
 doi: '10.18160/M3VW-DRM5'
+all_gases_obspack_doi: '10.18160/ERAF-JSPW'
 dois_for_default_citations:
   - '10.18160/PP29-9CNZ'
   - '10.18160/ATM_NRT_CO2_CH4'
 
 input: '../input'
 output: '../output/co'
+obspack_product_description: 'the CO European Obspack data product (version 11.0)'
 obspack_product_name: 'GVeu'
 obspack_product_version:
 major_version_for_doi: 11

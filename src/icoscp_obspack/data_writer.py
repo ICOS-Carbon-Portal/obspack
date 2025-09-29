@@ -591,16 +591,25 @@ class DataWriter:
                     "contributors": self.author_uris,
                     "hostOrganization": "http://meta.icos-cp.eu/resources/organizations/CP",
                     "comment": (
-                        "European Obspack observational timeseries in netcdf format of ambient mole"
-                        f" fraction of {self.config.gas} in dry air calibrated using the WMO GAW calibration"
-                        f" scale {self.config.calibration_scale}, composed of (all whenever available)"
-                        f" historical PI QCed data, ICOS Level 2 data and ICOS NRT data"),
+                        f"This data file contains high accuracy European ObsPack observational timeseries"
+                        f" in netCDF format of ambient mole fraction of {self.config.gas} in dry air"
+                        f" collected at {self.station.org.name} ({self.height} m). The measurements were"
+                        f" calibrated using the WMO GAW calibration scale {self.config.calibration_scale}."
+                        f" Included are (all whenever available) historical PI QCed data, ICOS Level 2 data,"
+                        f" ICOS FastTrack data and ICOS NRT data."
+                        f" It is part of {self.config.obspack_product_description} and is intended for use"
+                        f" in carbon cycle inverse modeling, model evaluation, and satellite validation"
+                        f" studies. Metadata for the full {self.config.gas} product release are available"
+                        f" at https://commons.datacite.org/doi.org/{self.config.doi}."
+                        f" Please also visit http://www.gml.noaa.gov/ccgg/obspack/ for more information."
+                        f" If you use these data in your research, please consider citing the full ObsPack"
+                        f" release that this file is part of"
+                        f" (https://commons.datacite.org/doi.org/{self.config.all_gases_obspack_doi})."),
                     "creationDate": self.dataset_creation_data.isoformat().replace('+00:00', 'Z'),
                     "sources": self.hashsums
                 }
             },
             "objectSpecification": obj_spec,
-            "preExistingDoi": self.config.doi,
             "references": {
                 "autodeprecateSameFilenameObjects": True,
                 "keywords": [

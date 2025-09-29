@@ -16,7 +16,9 @@ YAML_CONFIG = '../config.yml'
 class YamlConfig:
     gas: str
     doi: str
+    all_gases_obspack_doi: str
     dois_for_default_citations: list[str]
+    obspack_product_description: str
     obspack_product_name: str
     obspack_product_version: str | None
     major_version_for_doi: int
@@ -63,7 +65,9 @@ class Config:
 
         self.gas: str = config.gas
         self.doi: str = config.doi
+        self.all_gases_obspack_doi: str = config.all_gases_obspack_doi
         self.default_citations: list[str] = [doi_citation(doi) for doi in config.dois_for_default_citations]
+        self.obspack_product_description: str = config.obspack_product_description
         self.obspack_product_name: str = config.obspack_product_name
         self.obspack_product_version: str = self._value_with_default(
             config.obspack_product_version,

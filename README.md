@@ -4,9 +4,11 @@ An application to loop through available ICOS atmosphere data (L2, FastTrack, NR
 #### Yaml configuration
 - **gas**: which gas the current run concerns ('co2', 'ch4', 'n2o', and 'co' are supported)
 - **doi**: DOI of the ICOS Obspack release that is going to be produced (see also the step-by-step explanations on how to use the application)
+- **all_gases_obspack_doi**: DOI of the ICOS Obspack collection that includes all datasets with data about all gases
 - **dois_for_default_citations**: list of DOIs of references that must be included in all datasets related to ICOS stations (for example "10.18160/PP29-9CNZ" and "10.18160/ATM_NRT_CO2_CH4")
 - **input**: directory containing input data for the application (defaults to `./input`)
 - **output**: directory of the application's outputs (defaults to `./output/{gas}`)
+- **obspack_product_description**: short description of the Obspack product, which will be used in the comment provided for each individual Obspack dataset and should fit in `It is part of {obspack_product_description} and is intended for use in...` (e.g. `the CO2 European Obspack data product (version 11.0)`)
 - **obspack_product_name**: name of the ObsPack product (e.g. "GVeu")
 - **obspack_product_version**: version of the ObsPack product (defaults to "v{major_version_for_doi}.{minor_version_for_doi}")
 - **major_version_for_doi**: major release number of the ObsPack product to be used for the DOI creation
@@ -44,10 +46,11 @@ An application to loop through available ICOS atmosphere data (L2, FastTrack, NR
 - **print_timing_messages**: a boolean that controls whether to print messages showing information about the time taken by various steps in the metadata and data processing (defaults to False)
 
 ### Using the application to create and upload the files of a new ObsParck release for a given gas
-**Note that this procedure has to be repeated for each gas (co2, ch4, n2o, co).**
-1. Before you run anything, go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft DOI. Do not add any content to the draft DOI, as this will be done later.
-2. Use the newly created DOI for the setting **doi** in the [configuration file](config.yml).
-3. Make all necessary changes to the [configuration file](config.yml). Pay special attention to the settings **gas**, **dois_for_default_citations**, **input**, **output**, **obspack_product_name**, **major_version_for_doi**, **minor_version_for_doi**, **title_for_doi**, **description_for_doi**, **subjects_for_doi**, **use_only_icos_stations_l1_or_l2**.
+**Note that this procedure, except for step 0, has to be repeated for each gas (co2, ch4, n2o, co).**
+0. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft DOI for the collection that will contain all datasets with data about all gases. Do not add any content to the draft DOI, as this will be done later.
+1. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft DOI for the Obspack data product that will contain all datasets about a specific gas. Do not add any content to the draft DOI, as this will be done later.
+2. Use the DOI created under step 1 for the setting **doi** in the [configuration file](config.yml). Use the DOI created under step 0 for the setting **all_gases_obspack_doi** in the [configuration file](config.yml).
+3. Make all necessary changes to the [configuration file](config.yml). Pay special attention to the settings **gas**, **dois_for_default_citations**, **input**, **output**, **obspack_product_description**, **obspack_product_name**, **major_version_for_doi**, **minor_version_for_doi**, **title_for_doi**, **description_for_doi**, **subjects_for_doi**, **use_only_icos_stations_l1_or_l2**.
 4. Run the script [`metadata_and_data_processing.py`](src/icoscp_obspack/metadata_and_data_processing.py).
 5. When all metadata have been processed, a message will inform about how many stations and sampling heights have been processed, when were the earliest and latest measurements among all processed datasets (this information is needed for step 4 of the upload to the data portal), and that a `JSON` file has been generated and is available for continuing the DOI minting. Paste the content of this file in the draft DOI "Edit as JSON" tab.
 6. Publish the DOI.
