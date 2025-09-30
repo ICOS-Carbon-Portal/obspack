@@ -21,7 +21,13 @@ from icoscp_obspack.config import Config
 from icoscp_obspack.data_writer import DataWriter, NetcdfFileInfoForUploader, StationExtraInfo
 from icoscp_obspack.doi import GeoLocation, GeoLocationPoint, produce_doi_meta
 from icoscp_obspack.geo_json import (
-	GeoFeature, GeoJson, Geometry, GeoProperties, save_geo_json, save_geo_json_pickle)
+    GeoFeature,
+    GeoJson,
+    Geometry,
+    GeoProperties,
+    save_geo_json,
+    save_geo_json_pickle,
+)
 from icoscp_obspack.plotting import get_global_average, ghg_filter_ts, plot_timeseries_station
 from icoscp_obspack.utils import timeit
 
