@@ -517,6 +517,8 @@ def combine_data_files(
         A pandas DataFrame combining all datasets in `dobjs` and a list of unused data objects.
     """
 
+    def get_datetime(s: pd.Series) -> datetime:
+        return datetime(s['Year'], s['Month'], s['Day'], s['Hour'], s['Minute'], tzinfo=timezone.utc)
     data_per_type: dict[str, pd.DataFrame] = {}
     hashsums_of_used_dobjs: dict[str, list[str]] = {}
     start_per_data_type: dict[str, datetime | None] = {}
@@ -526,10 +528,7 @@ def combine_data_files(
             if dobj.specification.self.uri == specs_per_gas[c.gas][data_type]:
                 dataset: pd.DataFrame = get_dataset(dobj)
                 dataset = dataset.rename({'DecimalDate': 'JulDate', c.gas: 'Meas'}, axis=1)
-                dataset['Datetime'] = dataset.apply(
-                    lambda row: datetime(
-                        row['Year'], row['Month'], row['Day'], row['Hour'], row['Minute'], tzinfo=timezone.utc),
-                    axis=1)
+                dataset['Datetime'] = dataset.apply(get_datetime, axis=1)
                 dataset['Level'] = data_level_per_data_type[data_type]
                 if c.useflags:
                     dataset = dataset[dataset['Flag'].isin(good_flags_per_data_type[data_type])]
