@@ -121,7 +121,7 @@ class DataWriter:
             ' intervals times are rounded down to the nearest second. Averaging interval is specified'
             ' through global attribute dataset_data_frequency (per hour)')
 
-        self.netcdf_dataset.createVariable('datetime', 'c', ('time', 'string_of_20chars',), zlib=True)
+        self.netcdf_dataset.createVariable('datetime', 'S1', ('time', 'string_of_20chars',), zlib=True)
         self.netcdf_dataset['datetime'].longname = 'air_sample_date_and_time_in_UTC'
         self.netcdf_dataset['datetime'].comment = (
             'Air sample date and time in UTC ISO 8601 format. Time-averaged values are reported at'
@@ -162,7 +162,7 @@ class DataWriter:
         self.netcdf_dataset['value'].comment = 'mole per mole of dry air'
         self.netcdf_dataset['value'].scale_comment = self.config.calibration_scale
 
-        self.netcdf_dataset.createVariable('nvalue', 'i', ('time',), fill_value=-9, zlib=True)
+        self.netcdf_dataset.createVariable('nvalue', 'i4', ('time',), fill_value=-9, zlib=True)
         self.netcdf_dataset['nvalue'].long_name = 'number_of_measurements_contributing_to_reported_value'
         self.netcdf_dataset['nvalue'].comment = (
             'Number of individual measurements used to compute reported value.'
@@ -198,27 +198,27 @@ class DataWriter:
         self.netcdf_dataset['intake_height'].comment = \
             'Sample intake height in meters above ground level (magl)'
 
-        self.netcdf_dataset.createVariable('qc_flag', 'c', ('time',), fill_value='-', zlib=True)
+        self.netcdf_dataset.createVariable('qc_flag', 'S1', ('time',), fill_value='-', zlib=True)
         self.netcdf_dataset['qc_flag'].long_name = 'quality_control_flag'
         self.netcdf_dataset['qc_flag'].comment = (
             '- Flag U = data correct before manual quality control - Flag O = data correct after manual'
             ' quality control, other flags denote incorrect data. Data processing at ICOS ATC is described'
             ' in [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
 
-        self.netcdf_dataset.createVariable('quality_id', 'i', ('time',), fill_value=-9, zlib=True)
+        self.netcdf_dataset.createVariable('quality_id', 'i4', ('time',), fill_value=-9, zlib=True)
         self.netcdf_dataset['quality_id'].long_name = 'quality_id'
         self.netcdf_dataset['quality_id'].comment = (
             'Unique ID linking to the QC provenance - Data processing at ICOS ATC is described in'
             ' [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
 
-        self.netcdf_dataset.createVariable('instrument', 'i', ('time',), fill_value=-9, zlib=True)
+        self.netcdf_dataset.createVariable('instrument', 'i4', ('time',), fill_value=-9, zlib=True)
         self.netcdf_dataset['instrument'].long_name = 'instrument_ID_to_detect_atmospheric_parameter'
         self.netcdf_dataset['instrument'].comment = \
             'Instrument ID used to detect atmospheric parameter. See provider_comment if available.'
         self.netcdf_dataset['instrument'].provider_comment = \
             'This variable is the ICOS provided Instrument ID'
 
-        self.netcdf_dataset.createVariable('icos_datalevel', 'b', ('time',), fill_value='255', zlib=True)
+        self.netcdf_dataset.createVariable('icos_datalevel', 'i1', ('time',), fill_value=127, zlib=True)
         self.netcdf_dataset['icos_datalevel'].long_name = 'icos_data_release_level'
         self.netcdf_dataset['icos_datalevel'].comment = (
             'Level 0 means pre-ICOS or non-ICOS data (processing by PI); Level 1 means NRT=near real-time'
@@ -247,21 +247,21 @@ class DataWriter:
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
 
-        self.netcdf_dataset.createVariable('obs_flag', 'b', ('time',), fill_value=1, zlib=True)
+        self.netcdf_dataset.createVariable('obs_flag', 'i1', ('time',), fill_value=1, zlib=True)
         self.netcdf_dataset['obs_flag'].long_name = 'obs_flag'
         self.netcdf_dataset['obs_flag'].units = 'binary'
         self.netcdf_dataset['obs_flag'].comment = (
             'Determined by data provider (1: large spatial scale representation; 0: local/regional'
             ' influence). The implementation of this flag is still being developed.')
 
-        self.netcdf_dataset.createVariable('obspack_id', 'c', ('time', 'string_of_200chars',), zlib=True)
+        self.netcdf_dataset.createVariable('obspack_id', 'S1', ('time', 'string_of_200chars',), zlib=True)
         self.netcdf_dataset['obspack_id'].long_name = 'obs_flag'
         self.netcdf_dataset['obspack_id'].comment = (
             'Unique identification string that distinguishes the data item from all other data items'
             ' both within an ObsPack product, and across any ObsPack data product. It includes obspack_name,'
             ' dataset_name, and obspack_num, with each field delimited by a tilde (~).')
 
-        self.netcdf_dataset.createVariable('assimilation_concerns', 'b', ('time', 'dim_concerns'), zlib=True)
+        self.netcdf_dataset.createVariable('assimilation_concerns', 'i1', ('time', 'dim_concerns'), zlib=True)
         self.netcdf_dataset['assimilation_concerns'].long_name = 'assimilation_concerns'
         self.netcdf_dataset['assimilation_concerns'].units = 'NA'
         self.netcdf_dataset['assimilation_concerns'].order = \
@@ -273,12 +273,12 @@ class DataWriter:
             ' model in general will have a 0 in the time window, representivity, and variability columns'
             ' of this variable. The implementation of this variable is still being developed.')
 
-        self.netcdf_dataset.createVariable('obs_num', 'i', ('time',), zlib=True)
+        self.netcdf_dataset.createVariable('obs_num', 'i4', ('time',), zlib=True)
         self.netcdf_dataset['obs_num'].long_name = 'unique_dataset_observation_number'
         self.netcdf_dataset['obs_num'].comment = \
             f'Unique observation number in this data set.  Range is from 1 to {self.data.shape[0] + 1}'
 
-        self.netcdf_dataset.createVariable('obspack_num', 'i', ('time',), zlib=True)
+        self.netcdf_dataset.createVariable('obspack_num', 'i4', ('time',), zlib=True)
         self.netcdf_dataset['obspack_num'].long_name = 'unique_ObsPack_observation_number'
         self.netcdf_dataset['obspack_num'].comment = (
             'Unique observation index number across all data sets in the ObsPack data product. '
