@@ -587,7 +587,7 @@ class DataWriter:
                 "station": self.station.org.self.uri,
                 "samplingHeight": self.height,
                 "production": {
-                    "creator": "http://meta.icos-cp.eu/resources/organizations/CP",
+                    "creator": "http://meta.icos-cp.eu/resources/organizations/ICOS_RI",
                     "contributors": self.author_uris,
                     "hostOrganization": "http://meta.icos-cp.eu/resources/organizations/CP",
                     "comment": (
