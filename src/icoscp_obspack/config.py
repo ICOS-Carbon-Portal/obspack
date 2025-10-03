@@ -1,5 +1,6 @@
 # Standard library imports.
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -16,8 +17,10 @@ YAML_CONFIG = '../config.yml'
 class YamlConfig:
     gas: str
     doi: str
+    all_gases_obspack_doi: str
     dois_for_default_citations: list[str]
-    obspack_product_name: str
+    obspack_product_description: str
+    obspack_product_name: str | None
     obspack_product_version: str | None
     major_version_for_doi: int
     minor_version_for_doi: int
@@ -63,8 +66,10 @@ class Config:
 
         self.gas: str = config.gas
         self.doi: str = config.doi
+        self.all_gases_obspack_doi: str = config.all_gases_obspack_doi
         self.default_citations: list[str] = [doi_citation(doi) for doi in config.dois_for_default_citations]
-        self.obspack_product_name: str = config.obspack_product_name
+        self.obspack_product_description: str = config.obspack_product_description
+        self.obspack_product_name: str | None = config.obspack_product_name
         self.obspack_product_version: str = self._value_with_default(
             config.obspack_product_version,
             f'v{config.major_version_for_doi}.{config.minor_version_for_doi}')
@@ -167,3 +172,14 @@ class Config:
             path.mkdir(parents=True)
             print(f"Created directory '{path}'")
         return path
+
+def create_obspack_release_name(config: Config, dt: datetime | None = None) -> str:
+    elements = ['obspack', config.gas, '466']
+    if config.obspack_product_name is not None:
+        elements.append(config.obspack_product_name)
+    elements.append(config.obspack_product_version)
+    if dt is None:
+        elements.append(datetime.now(tz=timezone.utc).strftime("%Y%m%d"))
+    else:
+        elements.append(dt.strftime("%Y%m%d"))
+    return '_'.join(elements)

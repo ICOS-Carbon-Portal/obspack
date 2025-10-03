@@ -121,7 +121,7 @@ class DataWriter:
             ' intervals times are rounded down to the nearest second. Averaging interval is specified'
             ' through global attribute dataset_data_frequency (per hour)')
 
-        self.netcdf_dataset.createVariable('datetime', 'c', ('time', 'string_of_20chars',), zlib=True)
+        self.netcdf_dataset.createVariable('datetime', 'S1', ('time', 'string_of_20chars',), zlib=True)
         self.netcdf_dataset['datetime'].longname = 'air_sample_date_and_time_in_UTC'
         self.netcdf_dataset['datetime'].comment = (
             'Air sample date and time in UTC ISO 8601 format. Time-averaged values are reported at'
@@ -162,7 +162,7 @@ class DataWriter:
         self.netcdf_dataset['value'].comment = 'mole per mole of dry air'
         self.netcdf_dataset['value'].scale_comment = self.config.calibration_scale
 
-        self.netcdf_dataset.createVariable('nvalue', 'i', ('time',), fill_value=-9, zlib=True)
+        self.netcdf_dataset.createVariable('nvalue', 'i4', ('time',), fill_value=-9, zlib=True)
         self.netcdf_dataset['nvalue'].long_name = 'number_of_measurements_contributing_to_reported_value'
         self.netcdf_dataset['nvalue'].comment = (
             'Number of individual measurements used to compute reported value.'
@@ -198,27 +198,27 @@ class DataWriter:
         self.netcdf_dataset['intake_height'].comment = \
             'Sample intake height in meters above ground level (magl)'
 
-        self.netcdf_dataset.createVariable('qc_flag', 'c', ('time',), fill_value='-', zlib=True)
+        self.netcdf_dataset.createVariable('qc_flag', 'S1', ('time',), fill_value='-', zlib=True)
         self.netcdf_dataset['qc_flag'].long_name = 'quality_control_flag'
         self.netcdf_dataset['qc_flag'].comment = (
             '- Flag U = data correct before manual quality control - Flag O = data correct after manual'
             ' quality control, other flags denote incorrect data. Data processing at ICOS ATC is described'
             ' in [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
 
-        self.netcdf_dataset.createVariable('quality_id', 'i', ('time',), fill_value=-9, zlib=True)
+        self.netcdf_dataset.createVariable('quality_id', 'i4', ('time',), fill_value=-9, zlib=True)
         self.netcdf_dataset['quality_id'].long_name = 'quality_id'
         self.netcdf_dataset['quality_id'].comment = (
             'Unique ID linking to the QC provenance - Data processing at ICOS ATC is described in'
             ' [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
 
-        self.netcdf_dataset.createVariable('instrument', 'i', ('time',), fill_value=-9, zlib=True)
+        self.netcdf_dataset.createVariable('instrument', 'i4', ('time',), fill_value=-9, zlib=True)
         self.netcdf_dataset['instrument'].long_name = 'instrument_ID_to_detect_atmospheric_parameter'
         self.netcdf_dataset['instrument'].comment = \
             'Instrument ID used to detect atmospheric parameter. See provider_comment if available.'
         self.netcdf_dataset['instrument'].provider_comment = \
             'This variable is the ICOS provided Instrument ID'
 
-        self.netcdf_dataset.createVariable('icos_datalevel', 'b', ('time',), fill_value='255', zlib=True)
+        self.netcdf_dataset.createVariable('icos_datalevel', 'i1', ('time',), fill_value=127, zlib=True)
         self.netcdf_dataset['icos_datalevel'].long_name = 'icos_data_release_level'
         self.netcdf_dataset['icos_datalevel'].comment = (
             'Level 0 means pre-ICOS or non-ICOS data (processing by PI); Level 1 means NRT=near real-time'
@@ -247,21 +247,21 @@ class DataWriter:
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
 
-        self.netcdf_dataset.createVariable('obs_flag', 'b', ('time',), fill_value=1, zlib=True)
+        self.netcdf_dataset.createVariable('obs_flag', 'i1', ('time',), fill_value=1, zlib=True)
         self.netcdf_dataset['obs_flag'].long_name = 'obs_flag'
         self.netcdf_dataset['obs_flag'].units = 'binary'
         self.netcdf_dataset['obs_flag'].comment = (
             'Determined by data provider (1: large spatial scale representation; 0: local/regional'
             ' influence). The implementation of this flag is still being developed.')
 
-        self.netcdf_dataset.createVariable('obspack_id', 'c', ('time', 'string_of_200chars',), zlib=True)
+        self.netcdf_dataset.createVariable('obspack_id', 'S1', ('time', 'string_of_200chars',), zlib=True)
         self.netcdf_dataset['obspack_id'].long_name = 'obs_flag'
         self.netcdf_dataset['obspack_id'].comment = (
             'Unique identification string that distinguishes the data item from all other data items'
             ' both within an ObsPack product, and across any ObsPack data product. It includes obspack_name,'
             ' dataset_name, and obspack_num, with each field delimited by a tilde (~).')
 
-        self.netcdf_dataset.createVariable('assimilation_concerns', 'b', ('time', 'dim_concerns'), zlib=True)
+        self.netcdf_dataset.createVariable('assimilation_concerns', 'i1', ('time', 'dim_concerns'), zlib=True)
         self.netcdf_dataset['assimilation_concerns'].long_name = 'assimilation_concerns'
         self.netcdf_dataset['assimilation_concerns'].units = 'NA'
         self.netcdf_dataset['assimilation_concerns'].order = \
@@ -273,12 +273,12 @@ class DataWriter:
             ' model in general will have a 0 in the time window, representivity, and variability columns'
             ' of this variable. The implementation of this variable is still being developed.')
 
-        self.netcdf_dataset.createVariable('obs_num', 'i', ('time',), zlib=True)
+        self.netcdf_dataset.createVariable('obs_num', 'i4', ('time',), zlib=True)
         self.netcdf_dataset['obs_num'].long_name = 'unique_dataset_observation_number'
         self.netcdf_dataset['obs_num'].comment = \
             f'Unique observation number in this data set.  Range is from 1 to {self.data.shape[0] + 1}'
 
-        self.netcdf_dataset.createVariable('obspack_num', 'i', ('time',), zlib=True)
+        self.netcdf_dataset.createVariable('obspack_num', 'i4', ('time',), zlib=True)
         self.netcdf_dataset['obspack_num'].long_name = 'unique_ObsPack_observation_number'
         self.netcdf_dataset['obspack_num'].comment = (
             'Unique observation index number across all data sets in the ObsPack data product. '
@@ -435,14 +435,15 @@ class DataWriter:
     def _calculate_variables(self) -> dict[str, Any]:
         variables: dict[str, Any] = {}
         timestamps = self.data.index.astype('int64') // 10**9 # Convert to seconds since epoch
-        index_mid = self.data.index + dt.timedelta(seconds=1800)
+        index: pd.DatetimeIndex = self.data.index
+        index_mid = index + dt.timedelta(seconds=1800)
         time_before_calculating_temporal_variables = dt.datetime.now(dt.timezone.utc)
         variables['start_time'] = timestamps
         variables['time'] = timestamps + 1800
         variables['datetime'] = [t.isoformat().replace('+00:00', 'Z') for t in index_mid]
         variables['time_decimal'] = [year_fraction(t) for t in index_mid]
-        variables['time_components'] = [extract_temporal_components(i, 1800) for i in self.data.index]
-        variables['solartime_components'] = [extract_temporal_components(i, 1800 + self.station_extra_info.timezone * 3600) for i in self.data.index]
+        variables['time_components'] = [extract_temporal_components(i, 1800) for i in index]
+        variables['solartime_components'] = [extract_temporal_components(i, 1800 + self.station_extra_info.timezone * 3600) for i in index]
         _ = timeit(time_before_calculating_temporal_variables, f'        Calculate time variables for {self.filename}', self.config.print_timing_messages)
         variables['value'] = self.data['Meas'].array
         variables['value_std_dev'] = self.data['Stdev'].array
@@ -477,7 +478,8 @@ class DataWriter:
                     np.array(values, dtype=string_dtypes[variable]))
             elif variable in ['value', 'value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB']:
                 new_values = values*self.config.conversion_factor
-                new_values[new_values < 0] = np.nan
+                if variable != 'icos_STTB':
+                    new_values[new_values < 0] = np.nan
                 self.netcdf_dataset[variable][:] = new_values
             else:
                 self.netcdf_dataset[variable][:] = values
@@ -586,20 +588,29 @@ class DataWriter:
                 "station": self.station.org.self.uri,
                 "samplingHeight": self.height,
                 "production": {
-                    "creator": "http://meta.icos-cp.eu/resources/organizations/CP",
+                    "creator": "http://meta.icos-cp.eu/resources/organizations/ICOS_RI",
                     "contributors": self.author_uris,
                     "hostOrganization": "http://meta.icos-cp.eu/resources/organizations/CP",
                     "comment": (
-                        "European Obspack observational timeseries in netcdf format of ambient mole"
-                        f" fraction of {self.config.gas} in dry air calibrated using the WMO GAW calibration"
-                        f" scale {self.config.calibration_scale}, composed of (all whenever available)"
-                        f" historical PI QCed data, ICOS Level 2 data and ICOS NRT data"),
+                        f"This data file contains high accuracy European ObsPack observational timeseries"
+                        f" in netCDF format of ambient mole fraction of {self.config.gas} in dry air"
+                        f" collected at {self.station.org.name} ({self.height} m). The measurements were"
+                        f" calibrated using the WMO GAW calibration scale {self.config.calibration_scale}."
+                        f" Included are (all whenever available) historical PI QCed data, ICOS Level 2 data,"
+                        f" ICOS FastTrack data and ICOS NRT data."
+                        f" It is part of {self.config.obspack_product_description} and is intended for use"
+                        f" in carbon cycle inverse modeling, model evaluation, and satellite validation"
+                        f" studies. Metadata for the full {self.config.gas} product release are available"
+                        f" at https://commons.datacite.org/doi.org/{self.config.doi}."
+                        f" Please also visit http://www.gml.noaa.gov/ccgg/obspack/ for more information."
+                        f" If you use these data in your research, please consider citing the full ObsPack"
+                        f" release that this file is part of"
+                        f" (https://commons.datacite.org/doi.org/{self.config.all_gases_obspack_doi})."),
                     "creationDate": self.dataset_creation_data.isoformat().replace('+00:00', 'Z'),
                     "sources": self.hashsums
                 }
             },
             "objectSpecification": obj_spec,
-            "preExistingDoi": self.config.doi,
             "references": {
                 "autodeprecateSameFilenameObjects": True,
                 "keywords": [

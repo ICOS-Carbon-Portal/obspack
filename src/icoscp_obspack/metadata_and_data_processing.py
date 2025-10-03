@@ -17,10 +17,17 @@ from pandas._typing import DtypeArg
 
 # Local application/library specific imports.
 from icoscp_obspack.citation import Author, AuthorWithWeight, citation, doi_citation
-from icoscp_obspack.config import Config
+from icoscp_obspack.config import Config, create_obspack_release_name
 from icoscp_obspack.data_writer import DataWriter, NetcdfFileInfoForUploader, StationExtraInfo
 from icoscp_obspack.doi import GeoLocation, GeoLocationPoint, produce_doi_meta
-from icoscp_obspack.geo_json import GeoFeature, GeoJson, Geometry, GeoProperties, produce_geo_json
+from icoscp_obspack.geo_json import (
+    GeoFeature,
+    GeoJson,
+    Geometry,
+    GeoProperties,
+    save_geo_json,
+    save_geo_json_pickle,
+)
 from icoscp_obspack.plotting import get_global_average, ghg_filter_ts, plot_timeseries_station
 from icoscp_obspack.utils import timeit
 
@@ -105,7 +112,7 @@ def main():
         raise ValueError(f"Invalid gas: {c.gas}.\nPossible values are 'co2', 'ch4', 'n2o', 'co'.")
     print(
         f'Running ObsPack application for gas "{c.gas}"...'
-        f'\nObsPack product name: obspack_{c.gas}_466_{c.obspack_product_name}_{c.obspack_product_version}'
+        f'\nObsPack product name: {create_obspack_release_name(c)}'
         f'\nTitle for DOI: {c.title_for_doi}'
         f'\nDescription for DOI: {c.description_for_doi}'
         f'\n\n{"_"*122}\nProcessing metadata and data...')
@@ -259,6 +266,8 @@ def main():
 
     # Handle authors to the Obspack collection.
     collection_authors_cleaned = clean_and_sort_authors(collection_authors)
+    with open(Path(c.output, f'authors_{c.gas}.pkl'), 'wb') as authors_file:
+        pickle.dump(collection_authors_cleaned, authors_file)
     # Save JSON to be pasted in the DOI app for minting the DOI of the Obspack release.
     produce_doi_meta(c, collection_authors_cleaned, geo_locations)
     # Save contributor and creator info as json for the DOI minting.
@@ -273,7 +282,8 @@ def main():
     # Save GeoJSON of station locations. The GeoJSON can be used when uploading the Obspack release
     # to the data portal.
     geo_json = GeoJson(features=geo_features, type='FeatureCollection')
-    produce_geo_json(geo_json, Path(c.output, f'GeoJSON_{c.gas}.json'))
+    save_geo_json(geo_json, Path(c.output, f'GeoJSON_{c.gas}.json'))
+    save_geo_json_pickle(geo_json, Path(c.output, f'GeoJSON_{c.gas}.pkl'))
     # Wait for the DOI to be minted before continuing
     user_input = None
     while user_input is None:
@@ -289,9 +299,7 @@ def main():
     row_counter = 0
     nc_files_info_for_uploader: list[NetcdfFileInfoForUploader] = []
     dataset_id = first_dataset_id[c.gas]
-    obspack_name = (
-        f'obspack_{c.gas}_466_{c.obspack_product_name}_'
-        f'{c.obspack_product_version}_{writing_data_start_time.strftime("%Y%m%d")}')
+    obspack_name = create_obspack_release_name(c, writing_data_start_time)
     obspack_citation = doi_citation(c.doi)
     for station_id, station_content in content_from_all_sampling_heights.items():
         print(f'\n\n{"-"*122}\nStation {station_id} ({station_counter+1}/{n_stations})\n{"-"*122}')
@@ -507,6 +515,8 @@ def combine_data_files(
         A pandas DataFrame combining all datasets in `dobjs` and a list of unused data objects.
     """
 
+    def get_datetime(s: pd.Series) -> datetime:
+        return datetime(s['Year'], s['Month'], s['Day'], s['Hour'], s['Minute'], tzinfo=timezone.utc)
     data_per_type: dict[str, pd.DataFrame] = {}
     hashsums_of_used_dobjs: dict[str, list[str]] = {}
     start_per_data_type: dict[str, datetime | None] = {}
@@ -516,10 +526,7 @@ def combine_data_files(
             if dobj.specification.self.uri == specs_per_gas[c.gas][data_type]:
                 dataset: pd.DataFrame = get_dataset(dobj)
                 dataset = dataset.rename({'DecimalDate': 'JulDate', c.gas: 'Meas'}, axis=1)
-                dataset['Datetime'] = dataset.apply(
-                    lambda row: datetime(
-                        row['Year'], row['Month'], row['Day'], row['Hour'], row['Minute'], tzinfo=timezone.utc),
-                    axis=1)
+                dataset['Datetime'] = dataset.apply(get_datetime, axis=1)
                 dataset['Level'] = data_level_per_data_type[data_type]
                 if c.useflags:
                     dataset = dataset[dataset['Flag'].isin(good_flags_per_data_type[data_type])]
