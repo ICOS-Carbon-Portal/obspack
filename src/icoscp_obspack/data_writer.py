@@ -435,14 +435,15 @@ class DataWriter:
     def _calculate_variables(self) -> dict[str, Any]:
         variables: dict[str, Any] = {}
         timestamps = self.data.index.astype('int64') // 10**9 # Convert to seconds since epoch
-        index_mid = self.data.index + dt.timedelta(seconds=1800)
+        index: pd.DatetimeIndex = self.data.index
+        index_mid = index + dt.timedelta(seconds=1800)
         time_before_calculating_temporal_variables = dt.datetime.now(dt.timezone.utc)
         variables['start_time'] = timestamps
         variables['time'] = timestamps + 1800
         variables['datetime'] = [t.isoformat().replace('+00:00', 'Z') for t in index_mid]
         variables['time_decimal'] = [year_fraction(t) for t in index_mid]
-        variables['time_components'] = [extract_temporal_components(i, 1800) for i in self.data.index]
-        variables['solartime_components'] = [extract_temporal_components(i, 1800 + self.station_extra_info.timezone * 3600) for i in self.data.index]
+        variables['time_components'] = [extract_temporal_components(i, 1800) for i in index]
+        variables['solartime_components'] = [extract_temporal_components(i, 1800 + self.station_extra_info.timezone * 3600) for i in index]
         _ = timeit(time_before_calculating_temporal_variables, f'        Calculate time variables for {self.filename}', self.config.print_timing_messages)
         variables['value'] = self.data['Meas'].array
         variables['value_std_dev'] = self.data['Stdev'].array
