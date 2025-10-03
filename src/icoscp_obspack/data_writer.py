@@ -570,12 +570,19 @@ class DataWriter:
     def _generate_metadata(self) -> dict[str, Any]:
         """Generate and upload metadata."""
         if self.config.gas == 'co2':
+            gas_species = 'CO2'
             obj_spec = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackTimeSerieResult'
         elif self.config.gas == 'ch4':
+            gas_species = 'CH4'
             obj_spec = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackCH4TimeSeriesResult'
         elif self.config.gas == 'n2o':
+            gas_species = 'N2O'
             obj_spec = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackN2oTimeSeriesResult'
+        elif self.config.gas == 'co':
+            gas_species = 'CO'
+            obj_spec = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackCOTimeSeriesResult'
         else:
+            gas_species = ''
             obj_spec = ''
 
         hashsum_of_previous_version = get_prev_by_name(filename=self.path_to_netcdf_file.name)
@@ -593,14 +600,14 @@ class DataWriter:
                     "hostOrganization": "http://meta.icos-cp.eu/resources/organizations/CP",
                     "comment": (
                         f"This data file contains high accuracy European ObsPack observational timeseries"
-                        f" in netCDF format of ambient mole fraction of {self.config.gas} in dry air"
+                        f" in netCDF format of ambient mole fraction of {gas_species} in dry air"
                         f" collected at {self.station.org.name} ({self.height} m). The measurements were"
                         f" calibrated using the WMO GAW calibration scale {self.config.calibration_scale}."
                         f" Included are (all whenever available) historical PI QCed data, ICOS Level 2 data,"
                         f" ICOS FastTrack data and ICOS NRT data."
                         f" It is part of {self.config.obspack_product_description} and is intended for use"
                         f" in carbon cycle inverse modeling, model evaluation, and satellite validation"
-                        f" studies. Metadata for the full {self.config.gas} product release are available"
+                        f" studies. Metadata for the full {gas_species} product release are available"
                         f" at https://commons.datacite.org/doi.org/{self.config.doi}."
                         f" Please also visit http://www.gml.noaa.gov/ccgg/obspack/ for more information."
                         f" If you use these data in your research, please consider citing the full ObsPack"
