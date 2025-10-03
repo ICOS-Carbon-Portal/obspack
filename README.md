@@ -17,12 +17,22 @@ figures representing the time-series of observations.
 3. Use the DOI created under step 2 for the setting **doi** in the 
    [configuration file](config.yml). Use the DOI created under step 1 for the
    setting **all_gases_obspack_doi** in the [configuration file](config.yml).
-4. Make all necessary changes to the [configuration file](config.yml). Pay 
-   special attention to the settings **gas**, **dois_for_default_citations**, 
-   **input**, **output**, **obspack_product_description**, 
-   **obspack_product_name**, **major_version_for_doi**, 
-   **minor_version_for_doi**, **title_for_doi**, **description_for_doi**,
-   **subjects_for_doi**, **use_only_icos_stations_l1_or_l2**.
+4. Make all necessary changes to the [configuration file](config.yml).  
+   Pay special attention to the settings:
+     - **gas** 
+     - **doi**
+     - **all_gases_obspack_doi**
+     - **dois_for_default_citations**
+     - **input** 
+     - **output**
+     - **obspack_product_description**
+     - **obspack_product_name**
+     - **major_version_for_doi**
+     - **minor_version_for_doi**
+     - **title_for_doi**
+     - **description_for_doi**
+     - **subjects_for_doi**
+     - **use_only_icos_stations_l1_or_l2**
 5. Run the script [`metadata_and_data_processing.py`](src/icoscp_obspack/metadata_and_data_processing.py).
 6. When all metadata have been processed, a message will inform about how many
    stations and sampling heights have been processed, when were the earliest and
