@@ -3,7 +3,7 @@ An application to loop through available ICOS atmosphere data (L2, FastTrack,
 NRT, historical) and produce per station and sampling height ObsPack compatible
 `netCDF` data files, as well as corresponding `.txt` data files and `.png`
 figures representing the time-series of observations.
-
+<hr>
 ### Creating and uploading ObsPack release files (per gas)
 **Steps 2 onward must be repeated per gas (CO₂, CH₄, N₂O, CO).**
 1. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft
@@ -93,7 +93,6 @@ figures representing the time-series of observations.
 13. Upload individual datasets to the data portal using the script
     [uploader.py](src/icoscp_obspack/uploader.py).
 <hr>
-
 #### Yaml configuration
 - **gas**: which gas the current run concerns ('co2', 'ch4', 'n2o', and 'co' are
   supported)
