@@ -17,7 +17,7 @@ from pandas._typing import DtypeArg
 
 # Local application/library specific imports.
 from icoscp_obspack.citation import Author, AuthorWithWeight, citation, doi_citation
-from icoscp_obspack.config import Config
+from icoscp_obspack.config import Config, create_obspack_release_name
 from icoscp_obspack.data_writer import DataWriter, NetcdfFileInfoForUploader, StationExtraInfo
 from icoscp_obspack.doi import GeoLocation, GeoLocationPoint, produce_doi_meta
 from icoscp_obspack.geo_json import (
@@ -112,7 +112,7 @@ def main():
         raise ValueError(f"Invalid gas: {c.gas}.\nPossible values are 'co2', 'ch4', 'n2o', 'co'.")
     print(
         f'Running ObsPack application for gas "{c.gas}"...'
-        f'\nObsPack product name: obspack_{c.gas}_466_{c.obspack_product_name}_{c.obspack_product_version}'
+        f'\nObsPack product name: {create_obspack_release_name(c)}'
         f'\nTitle for DOI: {c.title_for_doi}'
         f'\nDescription for DOI: {c.description_for_doi}'
         f'\n\n{"_"*122}\nProcessing metadata and data...')
@@ -299,9 +299,7 @@ def main():
     row_counter = 0
     nc_files_info_for_uploader: list[NetcdfFileInfoForUploader] = []
     dataset_id = first_dataset_id[c.gas]
-    obspack_name = (
-        f'obspack_{c.gas}_466_{c.obspack_product_name}_'
-        f'{c.obspack_product_version}_{writing_data_start_time.strftime("%Y%m%d")}')
+    obspack_name = create_obspack_release_name(c, writing_data_start_time)
     obspack_citation = doi_citation(c.doi)
     for station_id, station_content in content_from_all_sampling_heights.items():
         print(f'\n\n{"-"*122}\nStation {station_id} ({station_counter+1}/{n_stations})\n{"-"*122}')

@@ -2,12 +2,12 @@
 import dataclasses
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal, TypeAlias
 
 # Local application/library specific imports.
 from icoscp_obspack.citation import AuthorWithWeight
-from icoscp_obspack.config import Config
+from icoscp_obspack.config import Config, create_obspack_release_name
 
 Uri: TypeAlias = str
 NameIdentifierSchemeName: TypeAlias = Literal['ORCID', 'ISNI', 'ROR', 'FLUXNET']
@@ -209,10 +209,8 @@ class DoiMeta:
     geoLocations: list[GeoLocation] | None = None
 
 def produce_doi_meta(config: Config, authors: list[AuthorWithWeight], geo_locations: list[GeoLocation]) -> None:
-    now = datetime.now()
-    obspack_name = (
-            f'obspack_{config.gas}_466_{config.obspack_product_name}_'
-            f'{config.obspack_product_version}_{datetime.now().strftime("%Y%m%d")}')
+    now = datetime.now(tz=timezone.utc)
+    obspack_name = create_obspack_release_name(config)
     doi_meta = DoiMeta(
         doi=Doi(prefix=config.doi.split('/')[0], suffix=config.doi.split('/')[1]),
         state='draft',

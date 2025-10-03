@@ -9,8 +9,8 @@ An application to loop through available ICOS atmosphere data (L2, FastTrack, NR
 - **input**: directory containing input data for the application (defaults to `./input`)
 - **output**: directory of the application's outputs (defaults to `./output/{gas}`)
 - **obspack_product_description**: short description of the Obspack product, which will be used in the comment provided for each individual Obspack dataset and should fit in `It is part of {obspack_product_description} and is intended for use in...` (e.g. `the CO2 European Obspack data product (version 11.0)`)
-- **obspack_product_name**: name of the ObsPack product (e.g. "GVeu")
-- **obspack_product_version**: version of the ObsPack product (defaults to "v{major_version_for_doi}.{minor_version_for_doi}")
+- **obspack_product_name**: name of the ObsPack product (e.g. "GVeu"); can be skipped in case only one item combining **obspack_product_name** and **obspack_product_version** is needed, in which case the value provided for **obspack_product_version** will be used
+- **obspack_product_version**: version of the ObsPack product (defaults to "v{major_version_for_doi}.{minor_version_for_doi}"); as mentioned on the previous line, can also be used a single identifier combining **obspack_product_name** and **obspack_product_version**
 - **major_version_for_doi**: major release number of the ObsPack product to be used for the DOI creation
 - **minor_version_for_doi**: minor revision number of the ObsPack product to be used for the DOI creation
 - **title_for_doi**: title to use for the creation of the DOI of the Obspack product (the file name will be appended automatically after the title and a semi-column and should not be included here)
