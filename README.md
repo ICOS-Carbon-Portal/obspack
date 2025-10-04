@@ -10,11 +10,15 @@ figures representing the time-series of observations.
 1. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft
    DOI for the collection that will contain all datasets (`.nc` files) with
    data about all gases. Do not add any content to the draft DOI, as this will
-   be done later.
+   be done later. However, check that the draft DOI is saved by reloading
+   the page. It might be necessary to make some small change (any change)
+   and update the DOI to make sure that it is saved.
 2. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft 
    DOI for the Obspack data product that will contain all datasets about a 
    specific gas. Do not add any content to the draft DOI, as this will be done
-   later.
+   later. However, check that the draft DOI is saved by reloading the page
+   It might be necessary to make some small change (any change) and update
+   the DOI to make sure that it is saved.
 3. Use the DOI created under step 2 for the setting **doi** in the 
    [configuration file](config.yml). Use the DOI created under step 1 for the
    setting **all_gases_obspack_doi** in the [configuration file](config.yml).
