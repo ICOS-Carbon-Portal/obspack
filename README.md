@@ -1,70 +1,208 @@
 ### ICOS Observation Package (ObsPack) Data Products
-An application to loop through available ICOS atmosphere data (L2, FastTrack, NRT, historical) and produce per station and sampling height ObsPack compatible `netCDF` data files, as well as corresponding `.txt` data files and `.png` figures representing the time-series of observations.
+An application to loop through available ICOS atmosphere data (L2, FastTrack,
+NRT, historical) and produce per station and sampling height ObsPack compatible
+`netCDF` data files, as well as corresponding `.txt` data files and `.png`
+figures representing the time-series of observations.
+<hr>
+
+### Creating and uploading ObsPack release files (per gas)
+**Steps 2 onward must be repeated per gas (CO₂, CH₄, N₂O, CO).**
+1. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft
+   DOI for the collection that will contain all datasets (`.nc` files) with
+   data about all gases. Do not add any content to the draft DOI, as this will
+   be done later. However, check that the draft DOI is saved by reloading
+   the page. It might be necessary to make some small change (any change)
+   and update the DOI to make sure that it is saved.
+2. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft 
+   DOI for the Obspack data product that will contain all datasets about a 
+   specific gas. Do not add any content to the draft DOI, as this will be done
+   later. However, check that the draft DOI is saved by reloading the page
+   It might be necessary to make some small change (any change) and update
+   the DOI to make sure that it is saved.
+3. Use the DOI created under step 2 for the setting **doi** in the 
+   [configuration file](config.yml). Use the DOI created under step 1 for the
+   setting **all_gases_obspack_doi** in the [configuration file](config.yml).
+4. Make all necessary changes to the [configuration file](config.yml).  
+   Pay special attention to the settings:
+     - **gas** 
+     - **doi**
+     - **all_gases_obspack_doi**
+     - **dois_for_default_citations**
+     - **input** 
+     - **output**
+     - **obspack_product_description**
+     - **obspack_product_name**
+     - **major_version_for_doi**
+     - **minor_version_for_doi**
+     - **title_for_doi**
+     - **description_for_doi**
+     - **subjects_for_doi**
+     - **use_only_icos_stations_l1_or_l2**
+5. Run the script [`metadata_and_data_processing.py`](src/icoscp_obspack/metadata_and_data_processing.py).
+6. When all metadata have been processed, a message will inform about how many
+   stations and sampling heights have been processed, when were the earliest and
+   latest measurements among all processed datasets (this information is needed
+   for step 4 of the upload to the data portal), and that a `JSON` file has been
+   generated and is available for continuing the DOI minting. Paste the content
+   of this file in the draft DOI "Edit as JSON" tab.
+7. Publish the DOI.
+8. **After** the DOI has been successfully published and is accessible, go back
+   to the console where the script was running and press `Enter` to proceed with
+   the generation of the data files (`.nc` and `.txt`), figures (`.png`) and
+   metadata files (`.json`). The data files and figures are needed for the
+   `.zip` archive that will be uploaded as the new version of the full ObsPack
+   release for the given gas. The metadata files are needed to upload individual
+   datasets.
+9. If the DOI is not accessible when the files are being generated, the script
+   will not be able to fetch the citation string attached to the DOI and it will 
+   be missing in the data files. In such a case, the script has to be run again
+   after the DOI is published. When running the script again, it is not
+   necessary to update the DOI with the content of the generated `JSON` file, as
+   the content does not change if nothing else has changed.
+10. Once all files have been generated, create a `.zip` archive containing the
+    data files and figures. The root directory of the archive should be named 
+    according to the ObsPack release (e.g. 
+    `obspack_ch4_466_GVeu_v11.0_20250818.zip` or 
+    `obspack_ch4_466_ICOSFT2025.3_20251003.zip`)
+    and should contain three directories named `nc`, `txt` and `png` which
+    contain the respective data files and figures. Perform a data sanity check
+    by examining all png files one by one.
+11. Use the [upload GUI](https://meta.icos-cp.eu/uploadgui/) to upload the
+    ObsPack release to the data portal. If a previous version of the ObsPack
+    release for the given gas exists (which should be the case for CO2, CH4,
+    N2O and CO), upload as a "New version" and provide the URI of the previous
+    version of the ObsPack release for this gas.  
+    Then, make the following changes:
+    1. Use the DOI you created in step 2 in the "Pre-existing DOI" field.
+    2. Update the "Title" field with the title provided in the DOI.
+    3. Update the "Description" field with the description provided in the DOI.
+       The number of stations/observatories and sampling heights/observation
+       levels might need to be updated. Refer to the message mentioned in step 6
+       to find the correct values for the current release.
+    4. Update the fields "From (UTC)" (if need be) and "To (UTC)". Refer to the
+       message mentioned in step 6 to find the correct values for the current
+       release. Make sure to input dates for which there is data for a full day.
+    5. Update the "GeoJSON" field with the content of the file that has been
+       generated by the script and that can be found under 
+       `{output}/GeoJSON_{gas}.json`.
+    6. Enable the "Production" field.
+    7. Add "ICOS (Integrated Carbon Observation System) Research Infrastructure"
+       as "Creator".
+    8. Update the "Creation date" field under Production. The 
+       `obspack_creation_date` attribute of any data file can be used as a
+       reference.
+    9. Add the .zip file that you generated in step 10 and click "Upload".
+12. Once the ObsPack release has been uploaded to the data portal, update the
+    DOI Target URL in the [DOI application](https://doi.icos-cp.eu/) with the
+    URL of the newly uploaded ObsPack release in the data portal.
+13. Upload individual datasets to the data portal using the script
+    [uploader.py](src/icoscp_obspack/uploader.py).
+<hr>
 
 #### Yaml configuration
-- **gas**: which gas the current run concerns ('co2', 'ch4', 'n2o', and 'co' are supported)
-- **doi**: DOI of the ICOS Obspack release that is going to be produced (see also the step-by-step explanations on how to use the application)
-- **all_gases_obspack_doi**: DOI of the ICOS Obspack collection that includes all datasets with data about all gases
-- **dois_for_default_citations**: list of DOIs of references that must be included in all datasets related to ICOS stations (for example "10.18160/PP29-9CNZ" and "10.18160/ATM_NRT_CO2_CH4")
-- **input**: directory containing input data for the application (defaults to `./input`)
-- **output**: directory of the application's outputs (defaults to `./output/{gas}`)
-- **obspack_product_description**: short description of the Obspack product, which will be used in the comment provided for each individual Obspack dataset and should fit in `It is part of {obspack_product_description} and is intended for use in...` (e.g. `the CO2 European Obspack data product (version 11.0)`)
-- **obspack_product_name**: name of the ObsPack product (e.g. "GVeu"); can be skipped in case only one item combining **obspack_product_name** and **obspack_product_version** is needed, in which case the value provided for **obspack_product_version** will be used
-- **obspack_product_version**: version of the ObsPack product (defaults to "v{major_version_for_doi}.{minor_version_for_doi}"); as mentioned on the previous line, can also be used a single identifier combining **obspack_product_name** and **obspack_product_version**
-- **major_version_for_doi**: major release number of the ObsPack product to be used for the DOI creation
-- **minor_version_for_doi**: minor revision number of the ObsPack product to be used for the DOI creation
-- **title_for_doi**: title to use for the creation of the DOI of the Obspack product (the file name will be appended automatically after the title and a semi-column and should not be included here)
-- **description_for_doi**: description of the ObsPack product to be used for the DOI creation
-- **subjects_for_doi**: list of subjects relevant to the ObsPack product to be included during the creation of the DOI (check older releases for examples)
-- **publisher_for_doi**: name of the publisher of the ObsProduct to be used for the DOI creation (defaults to "ICOS ERIC - Carbon Portal")
-- **resource_type_for_doi**: name of the resource type to be used for the DOI creation (defaults to "compressed ZIP archive")
-- **format_info_for_doi**: explanations about the content of the file included in the ObsPack release (defaults to "Compressed ZIP archive of netcdf and ASCII files with semicolon separated columns. Overview pictures of recent data and trend plots since 2010 are provided as bitmaps in png format.")
-- **rights_for_doi**: license under which the ObsPack release is published (default to "Creative Commons Attribution 4.0 International")
-- **rights_uri_for_doi**: URI to the license (defaults to "https://creativecommons.org/licenses/by/4.0/legalcode")
-- **doi_json_file**: path to the file which will be generated by the application and will contain the `JSON` formatted content needed to mint a new DOI for the ObsPack product (defaults to `{output}/doi_json_{gas}.json`)
-- **info_about_produced_files**: path to the file which will be generated by the application and will contain information about all produced netCDF files (defaults to `{output}/info_about_produced_files_for_{gas}.csv`). This file was intended to be used for uploading individual ObsPack datasets to the data portal, but is not needed for this task anymore.
-- **nc**: path to the directory where data files in netCDF format are saved (defaults to `{output}/nc`)
-- **json**: path to the directory where `JSON` files containing metadata about individual ObsPack datasets are saved. These files are intended to be used for uploading the datasets to the data portal (defaults to `{output}/json`)
-- **txt**: path to the directory where data files in text format are saved (defaults to `{output}/txt`)
-- **png**: path to the directory where figures are saved (defaults to `{output}/png`)
-- **pickle**: path to the directory where pickle files containing lists of authors/contributors/creators are saved for caching and debugging (defaults to `{output}/pickle`)
-- **zip**: path to the directory where zip files of datasets downloaded from the data portal are cached (defaults to `{output}/zip`)
-- **use_only_icos_stations_l1_or_l2**: a boolean that controls whether only data from ICOS L1 and L2 stations should be processed (defaults to True)
-- **use_cached_datafiles**: a boolean that controls whether cached data files should be used, otherwise datasets are re-downloaded (defaults to False)
-- **analyse**: a boolean that controls whether the trend of time-series is calculated using the CCGCRV filtering routine from Thonen et al. (1996) to be displayed on the figures (defaults to True)
-- **do_png**: a boolean that controls whether figures are generated (defaults to True)
-- **display_plots**: a boolean that controls whether the generated plots are dynamically shown during runtime (defaults to False)
-- **do_txt**: a boolean that controls whether `.txt` data files are generated (defaults to True)
-- **debug**: a boolean that controls whether the application should run in debug mode, which controls whether pickle files are used for caching (defaults to False)
-- **refresh_pickles**: a boolean that controls whether the pickle files should be updated during the run (defaults to False)
-- **use_mauna_loa_for_global_co2**: a boolean that controls whether the time-series from Mauna Loa is used instead of the marine BL global average as a reference trend in figures of CO2 datasets (defaults to False)
-- **use_flags**: a boolean that controls whether only data points with "good" quality flags are used in the generated data files (defaults to True)
-- **lab_numbers**: path to the `.csv` file containing information about measurement laboratories (defaults to `{input}/lab_numbers.csv`) (source: https://gml.noaa.gov/ccgg/obspack/labinfo.html)
-- **icos_stations**: path to the `.csv` file containing information about ICOS and non-ICOS stations and the related measurement laboratories (defaults to `{input}/icos_stations.csv`)
-- **header**: path to the `.txt` file containing a template for the header of the `.txt` data files (defaults to `{input}/header.txt`)
-- **default_author_weight**: the default citation weight to use for authors who's citation weight is not set in the metadata (defaults to 0)
-- **print_timing_messages**: a boolean that controls whether to print messages showing information about the time taken by various steps in the metadata and data processing (defaults to False)
-
-### Using the application to create and upload the files of a new ObsParck release for a given gas
-**Note that this procedure, except for step 0, has to be repeated for each gas (co2, ch4, n2o, co).**
-0. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft DOI for the collection that will contain all datasets with data about all gases. Do not add any content to the draft DOI, as this will be done later.
-1. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft DOI for the Obspack data product that will contain all datasets about a specific gas. Do not add any content to the draft DOI, as this will be done later.
-2. Use the DOI created under step 1 for the setting **doi** in the [configuration file](config.yml). Use the DOI created under step 0 for the setting **all_gases_obspack_doi** in the [configuration file](config.yml).
-3. Make all necessary changes to the [configuration file](config.yml). Pay special attention to the settings **gas**, **dois_for_default_citations**, **input**, **output**, **obspack_product_description**, **obspack_product_name**, **major_version_for_doi**, **minor_version_for_doi**, **title_for_doi**, **description_for_doi**, **subjects_for_doi**, **use_only_icos_stations_l1_or_l2**.
-4. Run the script [`metadata_and_data_processing.py`](src/icoscp_obspack/metadata_and_data_processing.py).
-5. When all metadata have been processed, a message will inform about how many stations and sampling heights have been processed, when were the earliest and latest measurements among all processed datasets (this information is needed for step 4 of the upload to the data portal), and that a `JSON` file has been generated and is available for continuing the DOI minting. Paste the content of this file in the draft DOI "Edit as JSON" tab.
-6. Publish the DOI.
-7. **After** the DOI has been successfully published and is accessible, go back to the console where the script was running and press `Enter` to proceed with the generation of the data files (`.nc` and `.txt`), figures (`.png`) and metadata files (`.json`). The data files and figures are needed for the `.zip` archive that will be uploaded as the new version of the full ObsPack release for the given gas. The metadata files are needed to upload individual datasets.
-8. If the DOI is not accessible when the files are being generated, the script will not be able to fetch the citation string attached to the DOI and it will be missing in the data files. In such a case, the script has to be run again after the DOI is published. When running the script again, it is not necessary to update the DOI with the content of the generated `JSON` file, as the content does not change if nothing else has changed.
-9. Once all files have been generated, create a `.zip` archive containing the data files and figures. The root directory of the archive should be named according to the ObsPack release (e.g. `obspack_ch4_466_GVeu_v11.0_20250818`) and should contain three directories named `nc`, `txt` and `png` which contain the respective data files and figures.
-10. Use the [upload GUI](https://meta.icos-cp.eu/uploadgui/) to upload the ObsPack release to the data portal. If a previous version of the ObsPack release for the given gas exists (which should be the case for CO2, CH4, N2O and CO), upload as a "New version" and provide the URI of the previous version of the ObsPack release for this gas. Then, make the following changes:
-   1. Use the DOI you created in step 1 in the "Pre-existing DOI" field.
-   2. Update the "Title" field with the title provided in the DOI.
-   3. Update the "Description" field with the description provided in the DOI. The number of stations/observatories and sampling heights/observation levels might need to be updated. Refer to the message mentioned in step 5 to find the correct values for the current release.
-   4. Update the fields "From (UTC)" (if need be) and "To (UTC)". Refer to the message mentioned in step 5 to find the correct values for the current release. Make sure to input dates for which there is data for a full day.
-   5. Update the "GeoJSON" field with the content of the file that has been generated by the script and that can be found under `{output}/GeoJSON_{gas}.json`.
-   6. Update the "Creation date" field under Production. The `obspack_creation_date` attribute of any data file can be used as a reference.
-   7. Add the .zip file that you generated in step 9 and click "Upload".
-11. Once the ObsPack release has been uploaded to the data portal, update the DOI Target URL in the [DOI application](https://doi.icos-cp.eu/) with the URL of the newly uploaded ObsPack release in the data portal.
-12. Upload individual datasets to the data portal using the script [uploader.py](src/icoscp_obspack/uploader.py).
-
+- **gas**: which gas the current run concerns ('co2', 'ch4', 'n2o', and 'co' are
+  supported)
+- **doi**: DOI of the ICOS Obspack release that is going to be produced (see
+  also the step-by-step explanations on how to use the application)
+- **all_gases_obspack_doi**: DOI of the ICOS Obspack collection that includes
+  all datasets with data about all gases
+- **dois_for_default_citations**: list of DOIs of references that must be
+  included in all datasets related to ICOS stations (for example
+  "10.18160/PP29-9CNZ" and "10.18160/ATM_NRT_CO2_CH4")
+- **input**: directory containing input data for the application (defaults to
+  `./input`)
+- **output**: directory of the application's outputs (defaults to
+  `./output/{gas}`)
+- **obspack_product_description**: short description of the Obspack product,
+  which will be used in the comment provided for each individual Obspack dataset
+  and should fit in `It is part of {obspack_product_description} and is intended
+  for use in...` (e.g. `the CO2 European Obspack data product (version 11.0)`)
+- **obspack_product_name**: name of the ObsPack product (e.g. "GVeu"); can be
+  skipped in case only one item combining **obspack_product_name** and
+  **obspack_product_version** is needed, in which case the value provided for
+  **obspack_product_version** will be used
+- **obspack_product_version**: version of the ObsPack product (defaults to
+  "v{major_version_for_doi}.{minor_version_for_doi}"); as mentioned on the
+  previous line, can also be used a single identifier combining
+  **obspack_product_name** and **obspack_product_version**
+- **major_version_for_doi**: major release number of the ObsPack product to be
+  used for the DOI creation
+- **minor_version_for_doi**: minor revision number of the ObsPack product to be
+  used for the DOI creation
+- **title_for_doi**: title to use for the creation of the DOI of the Obspack
+  product (the file name will be appended automatically after the title and a
+  semi-column and should not be included here)
+- **description_for_doi**: description of the ObsPack product to be used for the
+  DOI creation
+- **subjects_for_doi**: list of subjects relevant to the ObsPack product to be
+  included during the creation of the DOI (check older releases for examples)
+- **publisher_for_doi**: name of the publisher of the ObsProduct to be used for
+  the DOI creation (defaults to "ICOS ERIC - Carbon Portal")
+- **resource_type_for_doi**: name of the resource type to be used for the DOI
+  creation (defaults to "compressed ZIP archive")
+- **format_info_for_doi**: explanations about the content of the file included
+  in the ObsPack release (defaults to "Compressed ZIP archive of netcdf and
+  ASCII files with semicolon separated columns. Overview pictures of recent data
+  and trend plots since 2010 are provided as bitmaps in png format.")
+- **rights_for_doi**: license under which the ObsPack release is published
+  (default to "Creative Commons Attribution 4.0 International")
+- **rights_uri_for_doi**: URI to the license (defaults to
+  "https://creativecommons.org/licenses/by/4.0/legalcode")
+- **doi_json_file**: path to the file which will be generated by the application
+  and will contain the `JSON` formatted content needed to mint a new DOI for the
+  ObsPack product (defaults to `{output}/doi_json_{gas}.json`)
+- **info_about_produced_files**: path to the file which will be generated by the
+  application and will contain information about all produced netCDF files
+  (defaults to `{output}/info_about_produced_files_for_{gas}.csv`). This file
+  was intended to be used for uploading individual ObsPack datasets to the data
+  portal, but is not needed for this task anymore.
+- **nc**: path to the directory where data files in netCDF format are saved
+  (defaults to `{output}/nc`)
+- **json**: path to the directory where `JSON` files containing metadata about
+  individual ObsPack datasets are saved. These files are intended to be used for
+  uploading the datasets to the data portal (defaults to `{output}/json`)
+- **txt**: path to the directory where data files in text format are saved
+  (defaults to `{output}/txt`)
+- **png**: path to the directory where figures are saved (defaults to
+  `{output}/png`)
+- **pickle**: path to the directory where pickle files containing lists of
+  authors/contributors/creators are saved for caching and debugging (defaults to
+  `{output}/pickle`)
+- **zip**: path to the directory where zip files of datasets downloaded from the
+  data portal are cached (defaults to `{output}/zip`)
+- **use_only_icos_stations_l1_or_l2**: a boolean that controls whether only data
+  from ICOS L1 and L2 stations should be processed (defaults to True)
+- **use_cached_datafiles**: a boolean that controls whether cached data files
+  should be used, otherwise datasets are re-downloaded (defaults to False)
+- **analyse**: a boolean that controls whether the trend of time-series is
+  calculated using the CCGCRV filtering routine from Thonen et al. (1996) to be
+  displayed on the figures (defaults to True)
+- **do_png**: a boolean that controls whether figures are generated (defaults to
+  True)
+- **display_plots**: a boolean that controls whether the generated plots are
+  dynamically shown during runtime (defaults to False)
+- **do_txt**: a boolean that controls whether `.txt` data files are generated
+  (defaults to True)
+- **debug**: a boolean that controls whether the application should run in debug
+  mode, which controls whether pickle files are used for caching (defaults to
+  False)
+- **refresh_pickles**: a boolean that controls whether the pickle files should 
+  be updated during the run (defaults to False)
+- **use_mauna_loa_for_global_co2**: a boolean that controls whether the
+  time-series from Mauna Loa is used instead of the marine BL global average as
+  a reference trend in figures of CO2 datasets (defaults to False)
+- **use_flags**: a boolean that controls whether only data points with "good"
+  quality flags are used in the generated data files (defaults to True)
+- **lab_numbers**: path to the `.csv` file containing information about
+  measurement laboratories (defaults to `{input}/lab_numbers.csv`)
+  (source: https://gml.noaa.gov/ccgg/obspack/labinfo.html)
+- **icos_stations**: path to the `.csv` file containing information about ICOS
+  and non-ICOS stations and the related measurement laboratories (defaults to
+  `{input}/icos_stations.csv`)
+- **header**: path to the `.txt` file containing a template for the header of
+  the `.txt` data files (defaults to `{input}/header.txt`)
+- **default_author_weight**: the default citation weight to use for authors
+  whose citation weight is not set in the metadata (defaults to 0)
+- **print_timing_messages**: a boolean that controls whether to print messages
+  showing information about the time taken by various steps in the metadata and
+  data processing (defaults to False)
