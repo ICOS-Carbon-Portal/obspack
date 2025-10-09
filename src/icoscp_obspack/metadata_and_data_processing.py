@@ -71,6 +71,11 @@ good_flags_per_data_type = {
 # Unique dataset ID in the obspack product.
 first_dataset_id = {'co2': 1000, 'ch4': 2000, 'n2o': 3000, 'co': 4000}
 
+# Maximum number of data objects that can be found for a given station and gas species.
+# This limit is not expected to be reached anytime soon at any station, so it is not included
+# in the configuration file.
+n_max_dobj = 200
+
 # Additional authors for specific stations.
 additional_authors: dict[str, list[Author]] = {
     'HFD': [
@@ -403,7 +408,13 @@ def extract_station_extra_info(icos_stations: pd.DataFrame, station_id: str) -> 
 def dobjs_from_station_by_sampling_height(station: StationLite) -> dict[float, list[DataObject]]:
     dobjs_per_sampling_height: dict[float, list[DataObject]] = {}
     specs = list(specs_per_gas[c.gas].values())
-    for dobj_lite in meta.list_data_objects(datatype=specs, station=station):
+    dobjs_lite = meta.list_data_objects(datatype=specs, station=station, limit=n_max_dobj)
+    if len(dobjs_lite) == n_max_dobj:
+        print(
+            f'There might be some unprocessed data objects at station {station.uri} because'
+            f' the limit ({n_max_dobj}) has been reached.\nPlease consider rerunning the script'
+            ' after setting a higher limit.')
+    for dobj_lite in dobjs_lite:
         if dobj_lite.sampling_height is None:
             print(
                 f'Skipping data object {dobj_lite.uri} at station {station.uri} because sampling '
