@@ -128,7 +128,7 @@ def main():
     for n, station in enumerate(meta_stations):
         print(f'\n\n{"-"*122}\nStation {station.id} ({n+1}/{n_stations})\n{"-"*122}')
         fetching_station_info_start_time = datetime.now(tz=timezone.utc)
-        station_meta = meta.get_station_meta(station.uri.replace('http:', 'https:'))
+        station_meta = meta.get_station_meta(station.uri)
         # Filter out stations that are not ATC stations or ICOS stations of level 1 or 2.
         if not isinstance(station_meta.specificInfo, AtcStationSpecifics):
             print(f'Skipping station {station.id} because it is not an ATC station.')
