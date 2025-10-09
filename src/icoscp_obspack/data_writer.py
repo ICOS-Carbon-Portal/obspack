@@ -625,6 +625,7 @@ class DataWriter:
             }
         }
 
+        # Not strictly needed as long as "autodeprecateSameFilenameObjects" is set to True
         if hashsum_of_previous_version is not None:
             metadata_for_upload["isNextVersionOf"] = [hashsum_of_previous_version]
 
@@ -640,6 +641,7 @@ def get_prev_by_name(filename: str) -> str | None:
             <http://meta.icos-cp.eu/resources/cpmeta/ObspackTimeSerieResult>
             <http://meta.icos-cp.eu/resources/cpmeta/ObspackCH4TimeSeriesResult>
             <http://meta.icos-cp.eu/resources/cpmeta/ObspackN2oTimeSeriesResult>
+            <http://meta.icos-cp.eu/resources/cpmeta/ObspackCOTimeSeriesResult>
         }}
         ?dobj cpmeta:hasObjectSpec ?spec .
         ?dobj cpmeta:hasName ?fileName .
