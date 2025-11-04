@@ -1,53 +1,83 @@
 # Standard library imports.
+import os
 import sys
 from http import HTTPStatus
+from http.cookiejar import CookieJar
 from pathlib import Path
 
 # Related third party imports.
-import pandas as pd
 import requests
+from icoscp_core.icos import auth
 
-# Local application/library-specific imports.
-from icoscp_obspack.constants import icons
-from icoscp_obspack.utils import get_cookie_jar
+# Local application/library specific imports.
+from icoscp_obspack.config import Config
 
 
-gas = input('Please specify gas ("co2", "ch4", "n2o"): ')
-produced = pd.read_csv(f'output/{gas}/produced.csv')
-collection = []
-for _i, row in produced.iterrows():
-    data_file_path = Path(row.folder, f'{row.fname}.nc')
-    json_file_path = Path(row.folder.replace('nc-files', 'json-files'), f'{row.fname}.json')
-    if gas == 'n2o' and 'svb' in str(json_file_path.resolve()):
-        continue
-    print(json_file_path)
-    # Upload metadata.
-    upload_meta_resp = requests.post(
-        url='https://meta.icos-cp.eu/upload',
-        data=open(file=json_file_path, mode='rb'),
-        headers={'content-type': 'application/json', 'Accept-Charset': 'UTF-8'},
-        cookies=get_cookie_jar()
-    )
-    if upload_meta_resp.status_code == HTTPStatus.OK:
-        landing_page = upload_meta_resp.text.replace('data', 'meta')
-        collection.append(landing_page)
-    else:
-        # Todo: correctly try-except the http request.
-        print(upload_meta_resp.text)
-        sys.exit('Something went wrong when uploading metadata. The application will now exit.')
+def main():
+    config = Config()
+    cookies = get_cookie_jar()
+    collection: list[str] = []
+    for filename in sorted(os.listdir(config.nc)):
+        json_file_path = Path(config.json, filename.replace('.nc', '.json'))
+        data_file_path = Path(config.nc, filename)
+        print(json_file_path)
+        # Upload metadata.
+        upload_meta_resp = requests.post(
+            url='https://meta.icos-cp.eu/upload',
+            data=open(file=json_file_path, mode='rb'),
+            headers={'Content-Type': 'application/json', 'Accept-Charset': 'UTF-8'},
+            cookies=cookies
+        )
+        if upload_meta_resp.status_code == HTTPStatus.OK:
+            landing_page = upload_meta_resp.text.replace('data', 'meta')
+            collection.append(landing_page)
+        else:
+            # Todo: correctly try-except the http request.
+            print(upload_meta_resp.text)
+            sys.exit('Something went wrong when uploading metadata. The application will now exit.')
         # Upload data.
-    upload_data_resp = requests.put(
-        url=upload_meta_resp.text,
-        cookies=get_cookie_jar(),
-        headers={'Content-Type': 'application/octet-stream'},
-        data=open(file=data_file_path, mode='rb')
-    )
-    if upload_data_resp.status_code == HTTPStatus.OK:
-        print(landing_page, icons.ICON_CHECK)
+        upload_data_resp = requests.put(
+            url=upload_meta_resp.text,
+            cookies=cookies,
+            headers={'Content-Type': 'application/octet-stream'},
+            data=open(file=data_file_path, mode='rb')
+        )
+        if upload_data_resp.status_code == HTTPStatus.OK:
+            print(landing_page, '\u2713')
+        else:
+            # Todo: correctly try-except the http request.
+            print(upload_data_resp.text)
+            sys.exit('Something went wrong when uploading data. The application will now exit.')
+    with open(Path(config.output, f'{config.gas}_collection.txt', 'w')) as f_handle:
+        for item in collection:
+            f_handle.write(f'{item}\n')
+
+
+def get_cookie_jar() -> CookieJar | None:
+    cookie_string = ''
+    cookie_jar: CookieJar | None = None
+    cookie_dict: dict[str, str] = {}
+    try:
+        cookie_string = auth.get_token().cookie_value
+    except Exception as e:
+        if "Config file does not exist" in str(e):
+            auth.init_config_file()
+            cookie_string = auth.get_token().cookie_value
+        elif "Incorrect user name or password" in str(e):
+            auth.init_config_file()
+            cookie_string = auth.get_token().cookie_value
+        else:
+            print("Got a weird exception...", e)
     else:
-        # Todo: correctly try-except the http request.
-        print(upload_data_resp.text)
-        sys.exit('Something went wrong when uploading data. The application will now exit.')
-with open(f'output/{gas}/{gas}_collection.txt', 'w') as f_handle:
-    for item in collection:
-        f_handle.write(f'{item}\n')
+        # Convert string to dictionary.
+        cookie_dict: dict[str, str] = {
+            cookie.split("=")[0]: cookie.split("=")[1] for cookie in cookie_string.split("; ")}
+    finally:
+        if cookie_string:
+            # Convert dictionary to RequestsCookieJar.
+            cookie_jar = requests.utils.cookiejar_from_dict(cookie_dict)
+    return cookie_jar
+
+
+if __name__ == '__main__':
+    main()

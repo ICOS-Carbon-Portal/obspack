@@ -1,16 +1,50 @@
-gas: ''
-doi: ''
+gas: 'co'
+doi: '10.18160/M3VW-DRM5'
+all_gases_obspack_doi: '10.18160/ERAF-JSPW'
+dois_for_default_citations:
+  - '10.18160/PP29-9CNZ'
+  - '10.18160/ATM_NRT_CO2_CH4'
 
-output: ''
-nc: ''
-json: ''
-txt: ''
-png: ''
-pickle: ''
-zip: ''
+input: '../input'
+output: '../output/co'
+obspack_product_description: 'the CO European Obspack data product (version 11.0)'
+obspack_product_name: 'GVeu'
+obspack_product_version:
+major_version_for_doi: 11
+minor_version_for_doi: 0
+title_for_doi: 'European Obspack compilation of atmospheric carbon monoxide data from ICOS and non-ICOS European stations for the period 1996-2024'
+description_for_doi: 'This data package contains high accuracy CO dry air mole fractions from 32 ICOS and non-ICOS European observatories at in total 73 observation levels, collected by the ICOS Atmosphere Thematic Centre (ATC) and provided by the station contributors. The package is the first release of the CO European Obspack data product (version 11.0), and is intended for use in carbon cycle inverse modeling, model evaluation, and satellite validation studies. Please report errors and send comments regarding this product to the ObsPack originators. Please read carefully the ObsPack Fair Use statement and cite appropriately. Metadata for this product are available at https://commons.datacite.org/doi.org/10.18160/M3VW-DRM5. Please visit http://www.gml.noaa.gov/ccgg/obspack/ for more information.'
+subjects_for_doi:
+  - 'Biogeochemical cycles, processes, and modeling'
+  - 'Troposphere: composition and chemistry'
+  - 'mole fraction of CO in dry air'
+  - 'Climate Change'
+  - 'Global Carbon Balance'
+publisher_for_doi:
+resource_type_for_doi:
+format_info_for_doi:
+rights_for_doi:
+rights_uri_for_doi:
+doi_json_file:
+info_about_produced_files:
+nc:
+json:
+txt:
+png:
+pickle:
+zip:
+use_only_icos_stations_l1_or_l2: false
+use_cached_datafiles: true
 analyse: true
-plot: false
 do_png: true
+display_plots: false
 do_txt: true
 debug: false
 refresh_pickles: true
+use_mauna_loa_for_global_co2: false
+use_flags: True
+lab_numbers:
+icos_stations:
+header:
+default_author_weight:
+print_timing_messages: false
