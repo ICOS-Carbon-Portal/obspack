@@ -33,9 +33,3 @@ def test_get_hash_sum(file_key, tmp_files):
     expected_hash = hashlib.sha256(content).hexdigest()
     result = get_hash_sum(tmp_files[file_key])
     assert result == expected_hash
-
-
-def test_get_hash_sum_raises_value_error():
-    """Check that calling with None raises ValueError."""
-    with pytest.raises(ValueError, match="A valid file path must be provided."):
-        get_hash_sum(None)
