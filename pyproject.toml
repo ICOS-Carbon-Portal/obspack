@@ -16,18 +16,32 @@ classifiers = ["License :: OSI Approved :: GNU General Public License v3 or late
 requires-python = ">=3.10"
 dynamic = ["description"]
 dependencies = [
-	"icoscp_core==0.3.7",
-	"matplotlib==3.6.0",
-	"netCDF4==1.7.2",
-	"pyyaml==6.0.2",
-	"requests==2.32.3",
-	"scipy==1.15.2",
+    "icoscp_core==0.3.7",
+    "matplotlib==3.6.0",
+    "netCDF4==1.7.2",
+    "pyyaml==6.0.2",
+    "requests==2.32.3",
+    "scipy==1.15.2",
+    "xarray==2025.3.1",
     "numpy==1.26.4",
     "seaborn==0.13.2",
 ]
 
 [project.urls]
 Source = "https://github.com/ICOS-Carbon-Portal/....."
+
+[tool.hatch.envs.default.scripts]
+clean = "rm -rf .coverage htmlcov .pytest_cache .ruff_cache"
+
+[tool.hatch.envs.test]
+dependencies = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[tool.hatch.envs.test.scripts]
+test = "pytest {args: tests/}"
+coverage = "python -m coverage run -m pytest {args:tests/} --cov=icoscp_obspack --cov-report=term-missing --cov-report=html"
 
 [tool.hatch.envs.lint]
 detached = true
@@ -37,12 +51,10 @@ dependencies = [
 ]
 
 [[tool.hatch.envs.test.matrix]]
-python = ["3.10", "3.11", "3.12", "3.13"]
+python = ["3.10", "3.11", "3.12"]
 
 [tool.hatch.envs.lint.scripts]
-lint = [
-    "ruff check {args: src/icoscp_obspack}"
-]
+lint = "ruff check {args: src/icoscp_obspack}"
 
 [tool.ruff]
 target-version = "py310"
