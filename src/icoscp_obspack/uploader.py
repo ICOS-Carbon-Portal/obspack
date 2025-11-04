@@ -11,7 +11,6 @@ import requests
 from icoscp_obspack.constants import icons
 from icoscp_obspack.utils import get_cookie_jar
 
-
 gas = input('Please specify gas ("co2", "ch4", "n2o"): ')
 produced = pd.read_csv(f'output/{gas}/produced.csv')
 collection = []

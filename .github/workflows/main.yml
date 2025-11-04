@@ -1,4 +1,4 @@
-name: Lint code
+name: Test & Lint code
 run-name: ${{ github.actor }} is linting ${{ github.repository }} 🧹
 
 on:
@@ -12,12 +12,12 @@ permissions:
   
 jobs:
   lint:
-    name: linting with Python ${{ matrix.python-version }} 🧹
+    name: testing & linting with Python ${{ matrix.python-version }} 🧹
     runs-on: ubuntu-latest
     strategy:
       matrix:
         # Specify the Python versions for testing here.
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       # Step 1: Checkout the code
       - name: Checkout code

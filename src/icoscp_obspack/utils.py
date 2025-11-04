@@ -2,7 +2,6 @@
 import datetime as dt
 import hashlib
 import json
-import sys
 from http import HTTPStatus
 from http.cookiejar import CookieJar
 from pathlib import Path
@@ -13,39 +12,6 @@ import requests
 from icoscp_core import icos
 from icoscp_core.sparql import SparqlResults
 from requests.utils import cookiejar_from_dict
-
-# Local application/library specific imports.
-from icoscp_obspack.constants import icons as i
-
-
-def is_notebook():
-    """Detect if running in a Jupyter notebook."""
-    try:
-        from IPython import get_ipython
-        shell = get_ipython().__class__.__name__
-        return shell == 'ZMQInteractiveShell'
-    except Exception:
-        return False
-
-
-def progress_bar(current: int | None = None, total: int | None = None, bar_length: int = 20) -> None:
-    """Outputs a loading-like bar."""
-    fraction = current / total
-    arrow = int(fraction * bar_length - 1) * '-' + '>'
-    padding = int(bar_length - len(arrow)) * ' '
-    percent = int(fraction * 100)
-    bar = f'Getting file metadata [{arrow}{padding}] {percent}%'
-
-    if is_notebook():
-        print(bar, end='\r', flush=True)
-        if current == total:
-            print()
-    else:
-        # Terminal or IDE console
-        sys.stdout.write('\r' + bar)
-        sys.stdout.flush()
-        if current == total:
-            sys.stdout.write(f' {i.ICON_CHECK}\n')
 
 
 def new_file_info(uri: str | None = None):
@@ -80,7 +46,6 @@ def write_json(path: str, content: dict[str, Any], convert_posix: bool = True
 def read_json(path: str) -> Any:
     """Read dictionary from json file."""
     with open(file=path) as json_handle:
-
         json_data = json.load(json_handle)
     str_to_posix(json_data)
     return json_data
