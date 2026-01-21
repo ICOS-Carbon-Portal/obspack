@@ -169,7 +169,6 @@ def main():
             print('-'*122)
 
         # Process metadata and data for each sampling height at the current station.
-        content_from_all_sampling_heights[station.id] = {}
         for sampling_height, dobjs_at_sampling_height in dobjs_per_sampling_height.items():
             if station.id in sampling_heights_to_skip.keys() \
                 and sampling_height in sampling_heights_to_skip[station.id]:
@@ -232,7 +231,7 @@ def main():
             collection_authors.extend(file_authors)
             _ = timeit(combining_datasets_end_time, f'Handle authors and citations for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
 
-            content_from_all_sampling_heights[station.id][sampling_height] = SamplingHeightContent(
+            content_from_all_sampling_heights.setdefault(station.id, {})[sampling_height] = SamplingHeightContent(
                 data=data_at_sampling_height,
                 station_meta=station_meta,
                 authors=file_authors_cleaned,
