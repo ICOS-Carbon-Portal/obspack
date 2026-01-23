@@ -90,6 +90,10 @@ additional_authors: dict[str, list[Author]] = {
         )]
 }
 
+# Gases to skip for some stations.
+gases_to_skip: dict[str, list[str]] = {
+    'HEL': ['co'], 'HUN': ['n2o'], 'IPR': ['n2o'], 'PAL': ['n2o'], 'WES': ['co']}
+
 # Sampling heights to skip for some stations.
 sampling_heights_to_skip: dict[str, list[float]] = {'BIR': [2.5], 'JFJ': [5]}
 
@@ -132,6 +136,8 @@ def main():
     n_stations = len(meta_stations)
     for n, station in enumerate(meta_stations):
         print(f'\n\n{"-"*122}\nStation {station.id} ({n+1}/{n_stations})\n{"-"*122}')
+        if c.gas in gases_to_skip[station.id]:
+            print(f'Skipping station {station.id} (see dict `gases_to_skip`).')
         fetching_station_info_start_time = datetime.now(tz=timezone.utc)
         station_meta = meta.get_station_meta(station.uri)
         # Filter out stations that are not ATC stations or ICOS stations of level 1 or 2.
