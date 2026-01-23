@@ -5,6 +5,32 @@ NRT, historical) and produce per station and sampling height ObsPack compatible
 figures representing the time-series of observations.
 <hr>
 
+### Recommended preliminary steps
+It is a good routine to verify that the information in the file
+[icos_stations.csv](input/icos_stations.csv) is correct and up-to-date before
+proceeding with creating ObsPack release files. This table contains the IDs and
+names of the labs (organizations) that are responsible for the measurements at
+each station, and this information is included in the file name of
+the individual ObsPack datasets, as well as in the metadata. The table also
+contains the OSCAR IDs of the stations which have been attributed one, and
+the timezone in which the stations are located. These values are also part
+of the metadata of the ObsPack netCDF files and the timezone is used to
+calculate the solar time which is provided in the data.
+When data from a new station need to be included in the ObsPack release,
+a new entry containing information about the station has to be added to
+the table before proceeding with the creation of the ObsPack release files.
+It is also advised to verify whether some stations have stopped providing new
+data since the previous release, in order to avoid creating new data files
+with the exact same content as the previous version. There is currently no
+configuration parameter to filter out such cases, as several different
+scenarios can happen (it is either just a specific gas at a given station that
+is not measured anymore, or one measurement level has been changed or does not
+provide any data anymore, etc.) It is recommended to do some temporary
+adjustements directly in the script
+[metadata_and_data_processing.py](src/icoscp_obspack/metadata_and_data_processing.py)
+in such cases, for example using the variables `gases_to_skip`,
+`sampling_heights_to_skip` or `deprecated_dobjs_to_use`.
+
 ### Creating and uploading ObsPack release files (per gas)
 **Steps 2 onward must be repeated per gas (CO₂, CH₄, N₂O, CO).**
 1. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft
@@ -96,7 +122,14 @@ figures representing the time-series of observations.
     DOI Target URL in the [DOI application](https://doi.icos-cp.eu/) with the
     URL of the newly uploaded ObsPack release in the data portal.
 13. Upload individual datasets to the data portal using the script
-    [uploader.py](src/icoscp_obspack/uploader.py).
+    [uploader.py](src/icoscp_obspack/uploader.py). Be careful that if
+    the content of the table [icos_stations.csv](input/icos_stations.csv) has
+    been updated (in particular the `NOAALabNr` values), the name of
+    the individually produced ObsPack data files might have changed and
+    the affected datasets will not be deprecating their previous version by
+    default. In such cases, the `json` files created by running the script have
+    to be updated manually to guarantee that the proper datasets are deprecated
+    by the new ones.
 <hr>
 
 #### Yaml configuration
