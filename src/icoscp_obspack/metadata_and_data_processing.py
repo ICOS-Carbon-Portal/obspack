@@ -136,7 +136,7 @@ def main():
     n_stations = len(meta_stations)
     for n, station in enumerate(meta_stations):
         print(f'\n\n{"-"*122}\nStation {station.id} ({n+1}/{n_stations})\n{"-"*122}')
-        if c.gas in gases_to_skip[station.id]:
+        if station.id in gases_to_skip.keys() and c.gas in gases_to_skip[station.id]:
             print(f'Skipping station {station.id} (see dict `gases_to_skip`).')
         fetching_station_info_start_time = datetime.now(tz=timezone.utc)
         station_meta = meta.get_station_meta(station.uri)
