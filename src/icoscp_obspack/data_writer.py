@@ -222,9 +222,10 @@ class DataWriter:
         self.netcdf_dataset['icos_datalevel'].long_name = 'icos_data_release_level'
         self.netcdf_dataset['icos_datalevel'].comment = (
             'Level 0 means pre-ICOS or non-ICOS data (processing by PI); Level 1 means NRT=near real-time'
-            ' data (Automatic Quality Control by ICOS ATC) delay max 24 hrs; Level 2 means final quality'
-            ' data (Manual and automatic QC by PI and ATC - Data processing at ICOS ATC is described in'
-            ' [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
+            ' data (Automatic Quality Control by ICOS ATC) delay max 24 hrs; Level 15 (1.5) means FastTrack'
+            ' data (Automatic and some manual QC and reprocessed calibration and target corrections by ATC'
+            ' and PI); Level 2 means final quality data (Manual and automatic QC by PI and ATC - Data'
+            ' processing at ICOS ATC is described in [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
 
         self.netcdf_dataset.createVariable('icos_LTR', 'f4', ('time',), fill_value=np.nan, zlib=True)
         self.netcdf_dataset['icos_LTR'].long_name = 'icos_long_term_repeatability'

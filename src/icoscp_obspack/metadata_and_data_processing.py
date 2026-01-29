@@ -90,8 +90,12 @@ additional_authors: dict[str, list[Author]] = {
         )]
 }
 
+# Gases to skip for some stations.
+gases_to_skip: dict[str, list[str]] = {
+    'HEL': ['co'], 'HUN': ['n2o'], 'IPR': ['n2o'], 'PAL': ['n2o'], 'WES': ['co']}
+
 # Sampling heights to skip for some stations.
-sampling_heights_to_skip: dict[str, list[float]] = {'BIR': [2.5], 'JFJ': [5]}
+sampling_heights_to_skip: dict[str, list[float]] = {'BIR': [2.5], 'HUN': [96], 'JFJ': [5]}
 
 # Data objects that are deprecated but should be included for some stations and sampling heights.
 deprecated_dobjs_to_use: dict[str, dict[str, dict[float, list[str]]]] = {
@@ -132,6 +136,8 @@ def main():
     n_stations = len(meta_stations)
     for n, station in enumerate(meta_stations):
         print(f'\n\n{"-"*122}\nStation {station.id} ({n+1}/{n_stations})\n{"-"*122}')
+        if station.id in gases_to_skip.keys() and c.gas in gases_to_skip[station.id]:
+            print(f'Skipping station {station.id} (see dict `gases_to_skip`).')
         fetching_station_info_start_time = datetime.now(tz=timezone.utc)
         station_meta = meta.get_station_meta(station.uri)
         # Filter out stations that are not ATC stations or ICOS stations of level 1 or 2.
@@ -169,7 +175,6 @@ def main():
             print('-'*122)
 
         # Process metadata and data for each sampling height at the current station.
-        content_from_all_sampling_heights[station.id] = {}
         for sampling_height, dobjs_at_sampling_height in dobjs_per_sampling_height.items():
             if station.id in sampling_heights_to_skip.keys() \
                 and sampling_height in sampling_heights_to_skip[station.id]:
@@ -232,7 +237,7 @@ def main():
             collection_authors.extend(file_authors)
             _ = timeit(combining_datasets_end_time, f'Handle authors and citations for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
 
-            content_from_all_sampling_heights[station.id][sampling_height] = SamplingHeightContent(
+            content_from_all_sampling_heights.setdefault(station.id, {})[sampling_height] = SamplingHeightContent(
                 data=data_at_sampling_height,
                 station_meta=station_meta,
                 authors=file_authors_cleaned,
