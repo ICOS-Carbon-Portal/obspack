@@ -92,7 +92,7 @@ additional_authors: dict[str, list[Author]] = {
 
 # Gases to skip for some stations.
 gases_to_skip: dict[str, list[str]] = {
-    'HEL': ['co'], 'HUN': ['n2o'], 'IPR': ['n2o'], 'PAL': ['n2o'], 'WES': ['co']}
+    'HEL': ['co'], 'HUN': ['n2o'], 'IPR': ['n2o'], 'PAL': ['n2o'], 'UTO': ['n2o'], 'WES': ['co']}
 
 # Sampling heights to skip for some stations.
 sampling_heights_to_skip: dict[str, list[float]] = {'BIR': [2.5], 'HUN': [96], 'JFJ': [5]}
