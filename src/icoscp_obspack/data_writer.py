@@ -472,11 +472,11 @@ class DataWriter:
         return variables
 
     def _fill_netcdf_variables(self, variables: dict[str, Any]):
-        string_dtypes = {'datetime': 'S20', 'obspack_id': 'S200'}
         for variable, values in variables.items():
             if variable in ['datetime', 'obspack_id']:
-                self.netcdf_dataset[variable][:] = netCDF4.stringtochar(
-                    np.array(values, dtype=string_dtypes[variable]))
+                var_shape = self.netcdf_dataset[variable].shape
+                self.netcdf_dataset[variable][:] = \
+                    np.array(values, f"S{var_shape[1]}").view("S1").reshape(var_shape)
             elif variable in ['value', 'value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB']:
                 new_values = values*self.config.conversion_factor
                 if variable != 'icos_STTB':
