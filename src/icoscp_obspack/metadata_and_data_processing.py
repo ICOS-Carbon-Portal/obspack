@@ -90,14 +90,15 @@ additional_authors: dict[str, list[Author]] = {
         )]
 }
 
-# Gases to skip for some stations.
+# Gases to skip for some station (to be revised before each ObsPack release).
 gases_to_skip: dict[str, list[str]] = {
-    'HEL': ['co'], 'HUN': ['n2o'], 'IPR': ['n2o'], 'PAL': ['n2o'], 'WES': ['co']}
+    'HEL': ['co'], 'HUN': ['n2o'], 'IPR': ['n2o'], 'PAL': ['n2o'], 'UTO': ['n2o'], 'WES': ['co']}
 
-# Sampling heights to skip for some stations.
+# Sampling heights to skip for some stations (to be revised before each ObsPack release).
 sampling_heights_to_skip: dict[str, list[float]] = {'BIR': [2.5], 'HUN': [96], 'JFJ': [5]}
 
-# Data objects that are deprecated but should be included for some stations and sampling heights.
+# Data objects that are deprecated but should be included for some stations and sampling heights
+# (to be revised before each ObsPack release).
 deprecated_dobjs_to_use: dict[str, dict[str, dict[float, list[str]]]] = {
     'co2': {},
     'ch4': {'HUN': {50: ['https://meta.icos-cp.eu/objects/fbBbk-WthWCXsAyN4UoZaZtY']}},
@@ -138,6 +139,7 @@ def main():
         print(f'\n\n{"-"*122}\nStation {station.id} ({n+1}/{n_stations})\n{"-"*122}')
         if station.id in gases_to_skip.keys() and c.gas in gases_to_skip[station.id]:
             print(f'Skipping station {station.id} (see dict `gases_to_skip`).')
+            continue
         fetching_station_info_start_time = datetime.now(tz=timezone.utc)
         station_meta = meta.get_station_meta(station.uri)
         # Filter out stations that are not ATC stations or ICOS stations of level 1 or 2.

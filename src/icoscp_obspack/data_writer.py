@@ -435,7 +435,7 @@ class DataWriter:
 
     def _calculate_variables(self) -> dict[str, Any]:
         variables: dict[str, Any] = {}
-        timestamps = self.data.index.astype('int64') // 10**9 # Convert to seconds since epoch
+        timestamps = self.data.index.astype('int64') // 10**6 # Convert to seconds since epoch
         index: pd.DatetimeIndex = self.data.index
         index_mid = index + dt.timedelta(seconds=1800)
         time_before_calculating_temporal_variables = dt.datetime.now(dt.timezone.utc)
