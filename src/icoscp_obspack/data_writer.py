@@ -19,6 +19,15 @@ from icoscp_obspack.citation import AuthorWithWeight
 from icoscp_obspack.config import Config
 from icoscp_obspack.utils import extract_temporal_components, get_hash_sum, timeit, year_fraction
 
+# Averaging interval of the input data, advertised to users through the netCDF attribute
+# 'dataset_data_frequency'. Time-averaged values are reported at the midpoint of the interval,
+# hence the half-interval offset applied to the reported time variables.
+DATA_FREQUENCY_IN_HOURS = 1.
+HALF_INTERVAL_IN_SEC = round(DATA_FREQUENCY_IN_HOURS * 3600 / 2)
+
+# Reference point of the 'seconds since 1970-01-01T00:00:00Z' units of the time variables.
+EPOCH = pd.Timestamp('1970-01-01', tz='UTC')
+
 
 @dataclass(frozen=True)
 class StationExtraInfo:
@@ -352,7 +361,7 @@ class DataWriter:
             'dataset_calibration_scale': self.config.calibration_scale,
             'dataset_start_date': self.data.index[0].isoformat().replace('+00:00', 'Z'),
             'dataset_stop_date': self.data.index[-1].isoformat().replace('+00:00', 'Z'),
-            'dataset_data_frequency': 1.,
+            'dataset_data_frequency': DATA_FREQUENCY_IN_HOURS,
             'dataset_data_frequency_unit': 'hour',
             'dataset_time_window_lst': '0-23',
             'dataset_time_window_utc': '0-23',
@@ -435,16 +444,20 @@ class DataWriter:
 
     def _calculate_variables(self) -> dict[str, Any]:
         variables: dict[str, Any] = {}
-        timestamps = self.data.index.astype('int64') // 10**6 # Convert to seconds since epoch
         index: pd.DatetimeIndex = self.data.index
-        index_mid = index + dt.timedelta(seconds=1800)
+        # Convert to seconds since the epoch. Subtracting a Timestamp and floor-dividing by a
+        # Timedelta is independent of the resolution of the index, unlike `astype('int64')`, which
+        # returns the underlying integers in whatever unit the index happens to carry (that unit
+        # depends on the pandas version and on how the index was built).
+        timestamps = (index - EPOCH) // pd.Timedelta('1s')
+        index_mid = index + dt.timedelta(seconds=HALF_INTERVAL_IN_SEC)
         time_before_calculating_temporal_variables = dt.datetime.now(dt.timezone.utc)
         variables['start_time'] = timestamps
-        variables['time'] = timestamps + 1800
+        variables['time'] = timestamps + HALF_INTERVAL_IN_SEC
         variables['datetime'] = [t.isoformat().replace('+00:00', 'Z') for t in index_mid]
         variables['time_decimal'] = [year_fraction(t) for t in index_mid]
-        variables['time_components'] = [extract_temporal_components(i, 1800) for i in index]
-        variables['solartime_components'] = [extract_temporal_components(i, 1800 + self.station_extra_info.timezone * 3600) for i in index]
+        variables['time_components'] = [extract_temporal_components(i, HALF_INTERVAL_IN_SEC) for i in index]
+        variables['solartime_components'] = [extract_temporal_components(i, HALF_INTERVAL_IN_SEC + self.station_extra_info.timezone * 3600) for i in index]
         _ = timeit(time_before_calculating_temporal_variables, f'        Calculate time variables for {self.filename}', self.config.print_timing_messages)
         variables['value'] = self.data['Meas'].array
         variables['value_std_dev'] = self.data['Stdev'].array
