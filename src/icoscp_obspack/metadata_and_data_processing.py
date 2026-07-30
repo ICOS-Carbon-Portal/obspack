@@ -31,8 +31,6 @@ from icoscp_obspack.geo_json import (
 from icoscp_obspack.plotting import get_global_average, ghg_filter_ts, plot_timeseries_station
 from icoscp_obspack.utils import timeit
 
-c = Config()
-
 fasttrack_spec = 'http://meta.icos-cp.eu/resources/cpmeta/atcGHGFastTrackNRTDataObject'
 specs_per_gas = {
     'co2': {
@@ -118,8 +116,9 @@ class SamplingHeightContent:
     hashsums: list[str]
 
 def main():
-    if c.gas not in ['co2', 'ch4', 'n2o', 'co']:
-        raise ValueError(f"Invalid gas: {c.gas}.\nPossible values are 'co2', 'ch4', 'n2o', 'co'.")
+    # The gas is validated by Config, which also resolves the application's paths.
+    c = Config()
+    c.create_output_directories()
     print(
         f'Running ObsPack application for gas "{c.gas}"...'
         f'\nObsPack product name: {create_obspack_release_name(c)}'
@@ -158,7 +157,7 @@ def main():
         fetching_station_info_end_time = timeit(fetching_station_info_start_time, f'Collect metadata and authors for station {station.id}', c.print_timing_messages)
 
         # Find all relevant data objects for a given station and separate them by sampling height.
-        dobjs_per_sampling_height = dobjs_from_station_by_sampling_height(station)
+        dobjs_per_sampling_height = dobjs_from_station_by_sampling_height(station, c.gas)
         if len(dobjs_per_sampling_height) == 0:
             continue
         _ = timeit(fetching_station_info_end_time, f'Find data objects for station {station.id} and organize them by sampling height', c.print_timing_messages)
@@ -194,7 +193,8 @@ def main():
             # Produce one dataset (pandas.DataFrame) with all datasets from the current station
             # and sampling height.
             data_at_sampling_height, used_dobjs_at_sampling_height = combine_data_files(
-                dobjs_at_sampling_height, station.id, sampling_height)
+                dobjs_at_sampling_height, station.id, sampling_height, c.gas, c.useflags, c.zip,
+                c.use_cached_datafiles)
             if data_at_sampling_height.empty:
                 print(f'No data found for station {station.id} and sampling height {sampling_height} m.')
                 continue
@@ -235,7 +235,7 @@ def main():
                 if dobj.references.citationString is not None:
                     citations.append(dobj.references.citationString)
                 short_hashsums.append(dobj.hash[:24])
-            file_authors_cleaned = clean_and_sort_authors(file_authors)
+            file_authors_cleaned = clean_and_sort_authors(file_authors, c.default_author_weight)
             collection_authors.extend(file_authors)
             _ = timeit(combining_datasets_end_time, f'Handle authors and citations for station {station.id} and sampling height {sampling_height}', c.print_timing_messages)
 
@@ -277,7 +277,7 @@ def main():
         global_avg_filtered = pd.DataFrame()
 
     # Handle authors to the Obspack collection.
-    collection_authors_cleaned = clean_and_sort_authors(collection_authors)
+    collection_authors_cleaned = clean_and_sort_authors(collection_authors, c.default_author_weight)
     with open(Path(c.output, f'authors_{c.gas}.pkl'), 'wb') as authors_file:
         pickle.dump(collection_authors_cleaned, authors_file)
     # Save JSON to be pasted in the DOI app for minting the DOI of the Obspack release.
@@ -317,7 +317,7 @@ def main():
         print(f'\n\n{"-"*122}\nStation {station_id} ({station_counter+1}/{n_stations})\n{"-"*122}')
         writing_station_data_start_time = datetime.now(tz=timezone.utc)
         n_heights = len(station_content.keys())
-        station_extra_info = extract_station_extra_info(icos_stations, station_id)
+        station_extra_info = extract_station_extra_info(icos_stations, station_id, c.file_icos_stations)
         for sampling_height, sampling_height_content in station_content.items():
             writing_sampling_height_data_start_time = datetime.now(tz=timezone.utc)
             # If a station has more than one measurement height, it is considered a "tower-insitu".
@@ -377,12 +377,13 @@ def main():
 
     pd.DataFrame(nc_files_info_for_uploader).to_csv(c.info_about_produced_files)
 
-def extract_station_extra_info(icos_stations: pd.DataFrame, station_id: str) -> StationExtraInfo:
+def extract_station_extra_info(
+        icos_stations: pd.DataFrame, station_id: str, icos_stations_file: Path) -> StationExtraInfo:
     cond = icos_stations['Hist'] == station_id
     if sum(cond) == 0:
         print(
             f'No information about station {station_id} is available in the file at'
-            f' {c.file_icos_stations}.')
+            f' {icos_stations_file}.')
         tz = _prompt_for_timezone(station_id)
         station_extra_info = StationExtraInfo(
             icos_id=station_id, icos_labeled='No', oscar_id='n.a.', lab_id=-1, lab_name='', timezone=tz)
@@ -396,7 +397,7 @@ def extract_station_extra_info(icos_stations: pd.DataFrame, station_id: str) -> 
         except ValueError:
             print(
                 f'Time zone for station {station_id} is not provided in the file at'
-                f' {c.file_icos_stations}.')
+                f' {icos_stations_file}.')
             tz = _prompt_for_timezone(station_id)
         station_extra_info = StationExtraInfo(
             icos_id=station_id,
@@ -408,13 +409,14 @@ def extract_station_extra_info(icos_stations: pd.DataFrame, station_id: str) -> 
         )
     if sum(cond) > 1:
         print(
-            f'Station {station_id} appears more than once in the file at {c.file_icos_stations}. '
+            f'Station {station_id} appears more than once in the file at {icos_stations_file}. '
             'The first occurence is used.')
     return station_extra_info
 
-def dobjs_from_station_by_sampling_height(station: StationLite) -> dict[float, list[DataObject]]:
+def dobjs_from_station_by_sampling_height(
+        station: StationLite, gas: str) -> dict[float, list[DataObject]]:
     dobjs_per_sampling_height: dict[float, list[DataObject]] = {}
-    specs = list(specs_per_gas[c.gas].values())
+    specs = list(specs_per_gas[gas].values())
     dobjs_lite = meta.list_data_objects(datatype=specs, station=station, limit=n_max_dobj)
     if len(dobjs_lite) == n_max_dobj:
         print(
@@ -431,7 +433,7 @@ def dobjs_from_station_by_sampling_height(station: StationLite) -> dict[float, l
         # they contain. The filename allows to determine which gas species the file is about.
         elif (
             dobj_lite.datatype_uri == fasttrack_spec
-            and dobj_lite.filename.split('.')[-2].split('_')[-1].lower() != c.gas):
+            and dobj_lite.filename.split('.')[-2].split('_')[-1].lower() != gas):
             continue
         else:
             sampling_height = dobj_lite.sampling_height
@@ -442,8 +444,8 @@ def dobjs_from_station_by_sampling_height(station: StationLite) -> dict[float, l
                 .setdefault(sampling_height, [])\
                 .append(meta.get_dobj_meta(dobj_lite))
     # Add deprecated data objects for some stations and sampling heights.
-    if station.id in deprecated_dobjs_to_use[c.gas].keys():
-        for h, urls in deprecated_dobjs_to_use[c.gas][station.id].items():
+    if station.id in deprecated_dobjs_to_use[gas].keys():
+        for h, urls in deprecated_dobjs_to_use[gas][station.id].items():
             dobjs_per_sampling_height.setdefault(h, []).extend([meta.get_dobj_meta(url) for url in urls])
     return dobjs_per_sampling_height
 
@@ -469,11 +471,13 @@ def author_from_person(person: Person) -> Author:
         end=None
     )
 
-def clean_and_sort_authors(authors: list[Author]) -> list[AuthorWithWeight]:
+def clean_and_sort_authors(authors: list[Author], default_weight: int) -> list[AuthorWithWeight]:
     """
     Clean and sort a list of authors.
     :param `authors`:
         A list of `Author`s.
+    :param `default_weight`:
+        Citation weight to assign to authors whose weight is not set in the metadata.
     :return:
         A sorted list of `Author`s.
     """
@@ -487,7 +491,7 @@ def clean_and_sort_authors(authors: list[Author]) -> list[AuthorWithWeight]:
         # If there is only one instance of the author with this URI, keep it.
         if len(authors_with_same_uri) == 1:
             authors_cleaned.append(AuthorWithWeight.from_author(
-                authors_with_same_uri[0], c.default_author_weight))
+                authors_with_same_uri[0], default_weight))
             continue
         # If there are multiple instances of the author with this URI, keep the one with the latest
         # start date among those who have no end date (which indicates that it is the current information).
@@ -498,7 +502,7 @@ def clean_and_sort_authors(authors: list[Author]) -> list[AuthorWithWeight]:
         if len(current_authors) > 0:
             current_authors.sort(key=lambda author: author.start or '', reverse=True)
             authors_cleaned.append(AuthorWithWeight.from_author(
-                current_authors[0], c.default_author_weight, imposed_weight=max_weight))
+                current_authors[0], default_weight, imposed_weight=max_weight))
             continue
         # If there is no current instance of the author, keep the one with the latest end date.
         # Use the maximum weight of all instances of the author (if available).
@@ -507,19 +511,20 @@ def clean_and_sort_authors(authors: list[Author]) -> list[AuthorWithWeight]:
         if len(authors_with_end_date) > 0:
             authors_with_end_date.sort(key=lambda author: author.end or '', reverse=True)
             authors_cleaned.append(AuthorWithWeight.from_author(
-                authors_with_end_date[0], c.default_author_weight, imposed_weight=max_weight))
+                authors_with_end_date[0], default_weight, imposed_weight=max_weight))
             continue
         # If none of the instances of the author has an end date, keep the one with the highest weight.
         # If none of the instances has a weight, assign the default weight.
         authors_with_same_uri.sort(key=lambda author: author.weight or 0, reverse=True)
         authors_cleaned.append(AuthorWithWeight.from_author(
-            authors_with_same_uri[0], c.default_author_weight))
+            authors_with_same_uri[0], default_weight))
     authors_cleaned.sort(
         key=lambda author: (-author.weight, author.last_name, author.first_name))
     return authors_cleaned
 
 def combine_data_files(
-        dobjs: list[DataObject], station_id: str, sampling_height: float
+        dobjs: list[DataObject], station_id: str, sampling_height: float, gas: str,
+        use_flags: bool, zip_dir: Path, use_cached_datafiles: bool
         ) -> tuple[pd.DataFrame, list[DataObject]]:
     """
     Combine datasets from a given station and sampling height.
@@ -529,6 +534,12 @@ def combine_data_files(
         Station ID code.
     :param `sampling_height`:
         Sampling height in meters.
+    :param `gas`:
+        The gas species being processed.
+    :param `use_flags`:
+        Whether to keep only the data points whose quality flag is considered good.
+    :param `zip_dir`, `use_cached_datafiles`:
+        Passed on to `get_dataset`.
     :return:
         A pandas DataFrame combining all datasets in `dobjs` and a list of unused data objects.
     """
@@ -541,22 +552,22 @@ def combine_data_files(
     stop_per_data_type: dict[str, datetime | None] = {}
     for dobj in dobjs:
         for data_type in ['historic', 'L2', 'fasttrack', 'nrt']:
-            if dobj.specification.self.uri == specs_per_gas[c.gas][data_type]:
-                dataset: pd.DataFrame = get_dataset(dobj)
-                dataset = dataset.rename({'DecimalDate': 'JulDate', c.gas: 'Meas'}, axis=1)
+            if dobj.specification.self.uri == specs_per_gas[gas][data_type]:
+                dataset: pd.DataFrame = get_dataset(dobj, zip_dir, use_cached_datafiles)
+                dataset = dataset.rename({'DecimalDate': 'JulDate', gas: 'Meas'}, axis=1)
                 dataset['Datetime'] = dataset.apply(get_datetime, axis=1)
                 dataset['Level'] = data_level_per_data_type[data_type]
-                if c.useflags:
+                if use_flags:
                     dataset = dataset[dataset['Flag'].isin(good_flags_per_data_type[data_type])]
                 # There should be at most one dataset of each type for a given station and sampling height.
                 # If more than one is found, keep the one with the most recent data unless the additional
                 # datasets were added manually among the deprecated datasets that need to be included.
                 if data_type in data_per_type.keys():
                     additional_dobj_is_needed = (
-                        station_id in deprecated_dobjs_to_use[c.gas].keys()
-                        and sampling_height in deprecated_dobjs_to_use[c.gas][station_id].keys()
+                        station_id in deprecated_dobjs_to_use[gas].keys()
+                        and sampling_height in deprecated_dobjs_to_use[gas][station_id].keys()
                         and f'https://meta.icos-cp.eu/objects/{dobj.hash[:24]}'
-                        in deprecated_dobjs_to_use[c.gas][station_id][sampling_height])
+                        in deprecated_dobjs_to_use[gas][station_id][sampling_height])
                     if additional_dobj_is_needed:
                         if dataset['Datetime'].iloc[-1] < data_per_type[data_type]['Datetime'].iloc[0]:
                             data_per_type[data_type] = pd.concat([dataset, data_per_type[data_type]])
@@ -635,12 +646,12 @@ def combine_data_files(
 
     return full_dataset.set_index('Datetime'), used_dobjs
 
-def get_dataset(dobj: DataObject) -> pd.DataFrame:
-    path_to_file = Path(c.zip, dobj.fileName)
+def get_dataset(dobj: DataObject, zip_dir: Path, use_cached_datafiles: bool) -> pd.DataFrame:
+    path_to_file = Path(zip_dir, dobj.fileName)
     print(f'  Processing file {path_to_file}...')
-    if not path_to_file.exists() or not c.use_cached_datafiles:
-        filename = data.save_to_folder(f'https://meta.icos-cp.eu/objects/{dobj.hash[:24]}', str(c.zip))
-        path_to_file = Path(c.zip, filename)
+    if not path_to_file.exists() or not use_cached_datafiles:
+        filename = data.save_to_folder(f'https://meta.icos-cp.eu/objects/{dobj.hash[:24]}', str(zip_dir))
+        path_to_file = Path(zip_dir, filename)
     if path_to_file.suffix == '.zip':
         zf = ZipFile(path_to_file, 'r')
         datafiles = [

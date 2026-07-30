@@ -1,6 +1,7 @@
 # Standard library imports.
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal
 
@@ -11,6 +12,27 @@ import yaml
 from icoscp_obspack.citation import doi_citation
 
 YAML_CONFIG = '../config.yml'
+
+
+@dataclass(frozen=True)
+class GasSpec:
+    """Constants describing one of the gases the application supports."""
+    conversion_factor: float
+    calibration_scale: str
+    plot_gas_label: str
+    plot_unit_label: str
+    plot_limy: tuple[int, int]
+
+
+# The gases the application supports. Adding an entry here is not sufficient on its own:
+# `specs_per_gas` and `first_dataset_id` in metadata_and_data_processing.py, and the object
+# specifications in data_writer.py, need a matching entry as well.
+GAS_SPECS: dict[str, GasSpec] = {
+    'co2': GasSpec(1e-6, 'WMO CO2 X2019', 'CO${_2}$', '[µmol/mol]', (380, 460)),
+    'ch4': GasSpec(1e-9, 'WMO X2004A', 'CH${_4}$', '[nmol/mol]', (1800, 2500)),
+    'n2o': GasSpec(1e-9, 'NOAA-2006A', 'N${_2}$O', '[nmol/mol]', (315, 370)),
+    'co': GasSpec(1e-9, 'WMO X2014A', 'CO', '[nmol/mol]', (0, 600)),
+}
 
 
 @dataclass()
@@ -64,10 +86,21 @@ class Config:
         with open(YAML_CONFIG) as yaml_handler:
             config = YamlConfig(**yaml.safe_load(yaml_handler))
 
+        # Reject an unsupported gas before any other work is done, so that the failure is
+        # reported here rather than as a missing attribute much later in the run.
+        if config.gas not in GAS_SPECS:
+            possible_values = ', '.join(f"'{gas}'" for gas in GAS_SPECS)
+            raise ValueError(f'Invalid gas: {config.gas}.\nPossible values are {possible_values}.')
+        gas_spec = GAS_SPECS[config.gas]
+
+        # Directories to be created by `create_output_directories()`. Collected while the paths
+        # below are resolved, so that constructing a Config does not touch the filesystem.
+        self._directories_to_create: list[Path] = []
+
         self.gas: str = config.gas
         self.doi: str = config.doi
         self.all_gases_obspack_doi: str = config.all_gases_obspack_doi
-        self.default_citations: list[str] = [doi_citation(doi) for doi in config.dois_for_default_citations]
+        self.dois_for_default_citations: list[str] = config.dois_for_default_citations
         self.obspack_product_description: str = config.obspack_product_description
         self.obspack_product_name: str | None = config.obspack_product_name
         self.obspack_product_version: str = self._value_with_default(
@@ -126,35 +159,34 @@ class Config:
         self.file_icos_stations: Path = self._init_path(
             Path(self.input, 'icos_stations.csv'), config.icos_stations, 'file')
 
-        self.conversion_factor: float
-        self.calibration_scale: str
-        if config.gas == 'co2':
-            self.conversion_factor = 1e-6
-            self.calibration_scale = 'WMO CO2 X2019'
-            self.plot_gas_label = 'CO${_2}$'
-            self.plot_unit_label = '[µmol/mol]'
-            self.plot_limy = [380, 460]
-        elif config.gas == 'ch4':
-            self.conversion_factor = 1e-9
-            self.calibration_scale = 'WMO X2004A'
-            self.plot_gas_label = 'CH${_4}$'
-            self.plot_unit_label = '[nmol/mol]'
-            self.plot_limy = [1800, 2500]
-        elif config.gas == 'n2o':
-            self.conversion_factor = 1e-9
-            self.calibration_scale = 'NOAA-2006A'
-            self.plot_gas_label = 'N${_2}$O'
-            self.plot_unit_label = '[nmol/mol]'
-            self.plot_limy = [315, 370]
-        elif config.gas == 'co':
-            self.conversion_factor = 1e-9
-            self.calibration_scale = 'WMO X2014A'
-            self.plot_gas_label = 'CO'
-            self.plot_unit_label = '[nmol/mol]'
-            self.plot_limy = [0, 600]
+        self.conversion_factor: float = gas_spec.conversion_factor
+        self.calibration_scale: str = gas_spec.calibration_scale
+        self.plot_gas_label: str = gas_spec.plot_gas_label
+        self.plot_unit_label: str = gas_spec.plot_unit_label
+        self.plot_limy: tuple[int, int] = gas_spec.plot_limy
 
         self.default_author_weight: int = self._value_with_default(config.default_author_weight, 0)
         self.print_timing_messages: bool = self._value_with_default(config.print_timing_messages, False)
+
+    @cached_property
+    def default_citations(self) -> list[str]:
+        """Citation strings of the references included in all datasets from ICOS stations.
+
+        Resolved on first use rather than in `__init__`, because fetching them requires one
+        network request per DOI and not every entry point needs them.
+        """
+        return [doi_citation(doi) for doi in self.dois_for_default_citations]
+
+    def create_output_directories(self) -> None:
+        """Create the application's directories.
+
+        Called explicitly by the entry points so that merely constructing a `Config` — in a
+        test, or in an entry point that only reads existing output — has no side effects.
+        """
+        for path in self._directories_to_create:
+            if not path.exists():
+                path.mkdir(parents=True)
+                print(f"Created directory '{path}'")
 
     def _value_with_default(self, val: Any, default: Any) -> Any:
         if val is None:
@@ -165,12 +197,12 @@ class Config:
     def _init_path(
             self, default_path: Path, user_specified_path: str | None,
             path_type: Literal["dir", "file"] | None = "dir") -> Path:
-        """Initialize the path to a newly produced file or an application directory
-        to store newly produced files."""
+        """Resolve the path to a newly produced file or an application directory to store
+        newly produced files. Directories are only recorded here; `create_output_directories()`
+        creates them."""
         path = default_path if user_specified_path is None else Path(user_specified_path)
-        if path_type == "dir" and not path.exists():
-            path.mkdir(parents=True)
-            print(f"Created directory '{path}'")
+        if path_type == "dir":
+            self._directories_to_create.append(path)
         return path
 
 def create_obspack_release_name(config: Config, dt: datetime | None = None) -> str:
