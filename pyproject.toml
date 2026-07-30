@@ -13,18 +13,18 @@ license = {file = "LICENSE"}
 readme = "README.md"
 keywords = ["...", "..."]
 classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dynamic = ["description"]
 dependencies = [
-    "icoscp_core==0.3.7",
-    "matplotlib==3.6.0",
-    "netCDF4==1.7.2",
-    "pyyaml==6.0.2",
-    "requests==2.32.3",
-    "scipy==1.15.2",
-    "xarray==2025.3.1",
-    "numpy==1.26.4",
-    "seaborn==0.13.2",
+    "icoscp_core>=0.3.7,<0.4",
+    "matplotlib>=3.9,<4",
+    "netCDF4>=1.7.2,<2",
+    "numpy>=2.0,<3",
+    "pandas>=3.0,<4",
+    "pyyaml>=6.0,<7",
+    "requests>=2.32,<3",
+    "scipy>=1.13,<2",
+    "seaborn>=0.13,<0.14",
 ]
 
 [project.urls]
@@ -51,13 +51,13 @@ dependencies = [
 ]
 
 [[tool.hatch.envs.test.matrix]]
-python = ["3.10", "3.11", "3.12"]
+python = ["3.12", "3.13"]
 
 [tool.hatch.envs.lint.scripts]
 lint = "ruff check {args: src/icoscp_obspack}"
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py312"
 line-length = 110
 exclude = ["ccgfilt.py"]
 
