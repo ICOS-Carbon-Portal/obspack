@@ -619,6 +619,7 @@ def combine_datasets(
                 if dataset['Datetime'].iloc[-1] < data_per_type[data_type]['Datetime'].iloc[-1]:
                     continue
                 else:
+                    data_per_type[data_type] = dataset
                     hashsums_of_used_dobjs[data_type] = [dobj.hash]
         else:
             data_per_type[data_type] = dataset
