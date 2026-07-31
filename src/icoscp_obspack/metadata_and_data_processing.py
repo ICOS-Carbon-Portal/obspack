@@ -115,6 +115,13 @@ class SamplingHeightContent:
     citations: list[str]
     hashsums: list[str]
 
+@dataclass(frozen=True)
+class LoadedDataset:
+    """The content of a single data object, tagged with the ICOS data type it belongs to."""
+    dobj: DataObject
+    data_type: str
+    data: pd.DataFrame
+
 def main():
     # The gas is validated by Config, which also resolves the application's paths.
     c = Config()
@@ -190,11 +197,12 @@ def main():
                 f' Processing {len(dobjs_at_sampling_height)} file(s)')
 
             fetching_sampling_height_start_time = datetime.now(tz=timezone.utc)
-            # Produce one dataset (pandas.DataFrame) with all datasets from the current station
-            # and sampling height.
-            data_at_sampling_height, used_dobjs_at_sampling_height = combine_data_files(
-                dobjs_at_sampling_height, station.id, sampling_height, c.gas, c.useflags, c.zip,
-                c.use_cached_datafiles)
+            # Read the data files, then produce one dataset (pandas.DataFrame) with all datasets
+            # from the current station and sampling height.
+            loaded_datasets = load_datasets(
+                dobjs_at_sampling_height, c.gas, c.useflags, c.zip, c.use_cached_datafiles)
+            data_at_sampling_height, used_dobjs_at_sampling_height = combine_datasets(
+                loaded_datasets, station.id, sampling_height, c.gas)
             if data_at_sampling_height.empty:
                 print(f'No data found for station {station.id} and sampling height {sampling_height} m.')
                 continue
@@ -522,18 +530,15 @@ def clean_and_sort_authors(authors: list[Author], default_weight: int) -> list[A
         key=lambda author: (-author.weight, author.last_name, author.first_name))
     return authors_cleaned
 
-def combine_data_files(
-        dobjs: list[DataObject], station_id: str, sampling_height: float, gas: str,
-        use_flags: bool, zip_dir: Path, use_cached_datafiles: bool
-        ) -> tuple[pd.DataFrame, list[DataObject]]:
+def load_datasets(
+        dobjs: list[DataObject], gas: str, use_flags: bool, zip_dir: Path,
+        use_cached_datafiles: bool) -> list[LoadedDataset]:
     """
-    Combine datasets from a given station and sampling height.
+    Read and normalize the content of every data object that holds data about `gas`.
+    This is the only part of the combination that reads files or accesses the network, so that
+    `combine_datasets` can work purely on the result.
     :param `dobjs`:
-        A list of `DataObject` that are related to the station and sampling height.
-    :param `station_id`:
-        Station ID code.
-    :param `sampling_height`:
-        Sampling height in meters.
+        A list of `DataObject` that are related to a station and sampling height.
     :param `gas`:
         The gas species being processed.
     :param `use_flags`:
@@ -541,15 +546,13 @@ def combine_data_files(
     :param `zip_dir`, `use_cached_datafiles`:
         Passed on to `get_dataset`.
     :return:
-        A pandas DataFrame combining all datasets in `dobjs` and a list of unused data objects.
+        One `LoadedDataset` per data object holding data about `gas`, in the order of `dobjs`.
     """
 
     def get_datetime(s: pd.Series) -> datetime:
         return datetime(s['Year'], s['Month'], s['Day'], s['Hour'], s['Minute'], tzinfo=timezone.utc)
-    data_per_type: dict[str, pd.DataFrame] = {}
-    hashsums_of_used_dobjs: dict[str, list[str]] = {}
-    start_per_data_type: dict[str, datetime | None] = {}
-    stop_per_data_type: dict[str, datetime | None] = {}
+
+    loaded_datasets: list[LoadedDataset] = []
     for dobj in dobjs:
         for data_type in ['historic', 'L2', 'fasttrack', 'nrt']:
             if dobj.specification.self.uri == specs_per_gas[gas][data_type]:
@@ -559,57 +562,87 @@ def combine_data_files(
                 dataset['Level'] = data_level_per_data_type[data_type]
                 if use_flags:
                     dataset = dataset[dataset['Flag'].isin(good_flags_per_data_type[data_type])]
-                # There should be at most one dataset of each type for a given station and sampling height.
-                # If more than one is found, keep the one with the most recent data unless the additional
-                # datasets were added manually among the deprecated datasets that need to be included.
-                if data_type in data_per_type.keys():
-                    additional_dobj_is_needed = (
-                        station_id in deprecated_dobjs_to_use[gas].keys()
-                        and sampling_height in deprecated_dobjs_to_use[gas][station_id].keys()
-                        and f'https://meta.icos-cp.eu/objects/{dobj.hash[:24]}'
-                        in deprecated_dobjs_to_use[gas][station_id][sampling_height])
-                    if additional_dobj_is_needed:
-                        if dataset['Datetime'].iloc[-1] < data_per_type[data_type]['Datetime'].iloc[0]:
-                            data_per_type[data_type] = pd.concat([dataset, data_per_type[data_type]])
-                            hashsums_of_used_dobjs[data_type].append(dobj.hash)
-                        elif dataset['Datetime'].iloc[0] > data_per_type[data_type]['Datetime'].iloc[-1]:
-                            data_per_type[data_type] = pd.concat([data_per_type[data_type], dataset])
-                            hashsums_of_used_dobjs[data_type].append(dobj.hash)
-                        else:
-                            print(
-                                f'Overlap in time between multiple datasets of type "{data_type} for station'
-                                f' {station_id} at sampling height {sampling_height} m. Datasets were not'
-                                ' merged.')
-                    else:
-                        print(
-                            f'More than one dataset of type "{data_type}" was found when processing'
-                            f' station {station_id} at sampling height {sampling_height} m.'
-                            ' The dataset with the most recent data is used.')
-                        if dataset['Datetime'].iloc[-1] < data_per_type[data_type]['Datetime'].iloc[-1]:
-                            continue
-                        else:
-                            hashsums_of_used_dobjs[data_type] = [dobj.hash]
+                loaded_datasets.append(LoadedDataset(dobj=dobj, data_type=data_type, data=dataset))
+    return loaded_datasets
+
+def combine_datasets(
+        loaded_datasets: list[LoadedDataset], station_id: str, sampling_height: float, gas: str
+        ) -> tuple[pd.DataFrame, list[DataObject]]:
+    """
+    Combine the datasets of a given station and sampling height into a single one.
+    Performs no I/O; the datasets are read beforehand by `load_datasets`.
+    :param `loaded_datasets`:
+        The datasets of the station and sampling height, as returned by `load_datasets`.
+    :param `station_id`:
+        Station ID code.
+    :param `sampling_height`:
+        Sampling height in meters.
+    :param `gas`:
+        The gas species being processed.
+    :return:
+        A pandas DataFrame combining all datasets and the list of data objects that were used.
+    """
+    data_per_type: dict[str, pd.DataFrame] = {}
+    hashsums_of_used_dobjs: dict[str, list[str]] = {}
+    start_per_data_type: dict[str, datetime | None] = {}
+    stop_per_data_type: dict[str, datetime | None] = {}
+    for loaded_dataset in loaded_datasets:
+        dobj = loaded_dataset.dobj
+        data_type = loaded_dataset.data_type
+        dataset = loaded_dataset.data
+        # There should be at most one dataset of each type for a given station and sampling height.
+        # If more than one is found, keep the one with the most recent data unless the additional
+        # datasets were added manually among the deprecated datasets that need to be included.
+        if data_type in data_per_type.keys():
+            additional_dobj_is_needed = (
+                station_id in deprecated_dobjs_to_use[gas].keys()
+                and sampling_height in deprecated_dobjs_to_use[gas][station_id].keys()
+                and f'https://meta.icos-cp.eu/objects/{dobj.hash[:24]}'
+                in deprecated_dobjs_to_use[gas][station_id][sampling_height])
+            if additional_dobj_is_needed:
+                if dataset['Datetime'].iloc[-1] < data_per_type[data_type]['Datetime'].iloc[0]:
+                    data_per_type[data_type] = pd.concat([dataset, data_per_type[data_type]])
+                    hashsums_of_used_dobjs[data_type].append(dobj.hash)
+                elif dataset['Datetime'].iloc[0] > data_per_type[data_type]['Datetime'].iloc[-1]:
+                    data_per_type[data_type] = pd.concat([data_per_type[data_type], dataset])
+                    hashsums_of_used_dobjs[data_type].append(dobj.hash)
                 else:
-                    data_per_type[data_type] = dataset
-                    hashsums_of_used_dobjs.setdefault(data_type, []).append(dobj.hash)
-                # Extract first and last timestamp of each dataset using metadata.
-                if isinstance(dobj.specificInfo, SpatioTemporalMeta):
-                    start_per_data_type[data_type] = \
-                        datetime.fromisoformat(dobj.specificInfo.temporal.interval.start)
-                    stop_per_data_type[data_type] = \
-                        datetime.fromisoformat(dobj.specificInfo.temporal.interval.stop)
-                elif dobj.specificInfo.acquisition.interval is not None:
-                    start_per_data_type[data_type] = \
-                        datetime.fromisoformat(dobj.specificInfo.acquisition.interval.start)
-                    stop_per_data_type[data_type] = \
-                        datetime.fromisoformat(dobj.specificInfo.acquisition.interval.stop)
+                    print(
+                        f'Overlap in time between multiple datasets of type "{data_type} for station'
+                        f' {station_id} at sampling height {sampling_height} m. Datasets were not'
+                        ' merged.')
+            else:
+                print(
+                    f'More than one dataset of type "{data_type}" was found when processing'
+                    f' station {station_id} at sampling height {sampling_height} m.'
+                    ' The dataset with the most recent data is used.')
+                if dataset['Datetime'].iloc[-1] < data_per_type[data_type]['Datetime'].iloc[-1]:
+                    continue
                 else:
-                    start_per_data_type[data_type] = None
-                    stop_per_data_type[data_type] = None
+                    hashsums_of_used_dobjs[data_type] = [dobj.hash]
+        else:
+            data_per_type[data_type] = dataset
+            hashsums_of_used_dobjs.setdefault(data_type, []).append(dobj.hash)
+        # Extract first and last timestamp of each dataset using metadata.
+        if isinstance(dobj.specificInfo, SpatioTemporalMeta):
+            start_per_data_type[data_type] = \
+                datetime.fromisoformat(dobj.specificInfo.temporal.interval.start)
+            stop_per_data_type[data_type] = \
+                datetime.fromisoformat(dobj.specificInfo.temporal.interval.stop)
+        elif dobj.specificInfo.acquisition.interval is not None:
+            start_per_data_type[data_type] = \
+                datetime.fromisoformat(dobj.specificInfo.acquisition.interval.start)
+            stop_per_data_type[data_type] = \
+                datetime.fromisoformat(dobj.specificInfo.acquisition.interval.stop)
+        else:
+            start_per_data_type[data_type] = None
+            stop_per_data_type[data_type] = None
 
     hashsums_of_all_used_dobjs: list[str] = [
         hashsum for hashsums in hashsums_of_used_dobjs.values() for hashsum in hashsums]
-    used_dobjs: list[DataObject] = [dobj for dobj in dobjs if dobj.hash in hashsums_of_all_used_dobjs]
+    used_dobjs: list[DataObject] = [
+        loaded_dataset.dobj for loaded_dataset in loaded_datasets
+        if loaded_dataset.dobj.hash in hashsums_of_all_used_dobjs]
 
     # Combine the datasets of different data types.
     # The data types are ordered in the sequence: 'historic' -> 'L2' -> 'fasttrack' -> 'nrt'
