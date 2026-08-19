@@ -6,7 +6,7 @@
 # ------------------------------------------------------------->>>>
 # DESCRIPTION
 #
-# obspack_description: This data file is part of a data package named Obspack that is intended for use in carbon cycle inverse modeling, model evaluation, and satellite validation studies. Please report errors and send comments regarding this product to the ObsPack originators. Please read carefully the ObsPack Fair Use statement and cite appropriately. DOI metadata for this product are available at https://search.datacite.org/works/doi_xxx. Please visit http://www.esrl.noaa.gov/gmd/ccgg/obspack/ for more information.
+# obspack_description: This data file is part of a data package named Obspack that is intended for use in carbon cycle inverse modeling, model evaluation, and satellite validation studies. Please report errors and send comments regarding this product to the ObsPack originators. Please read carefully the ObsPack Fair Use statement and cite appropriately. DOI metadata for this product are available at https://commons.datacite.org/doi.org/doi_xxx. Please visit http://www.esrl.noaa.gov/gmd/ccgg/obspack/ for more information.
 #
 # ------------------------------------------------------------->>>>
 # CITATION

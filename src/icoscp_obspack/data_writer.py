@@ -373,7 +373,7 @@ class DataWriter:
                 ' and satellite validation studies. Please report errors and send comments'
                 ' regarding this product to the ObsPack originators. Please read carefully the ObsPack'
                 ' Fair Use statement and cite appropriately. DOI metadata for this product are available'
-                f' at https://search.datacite.org/works/{self.config.doi}.'),
+                f' at https://commons.datacite.org/doi.org/{self.config.doi}.'),
             'dataset_usage_url': f'https://doi.org/{self.config.doi}',
             'dataset_usage_description': (
                 'In addition to this product\'s citation we ask that you please cite the following'
@@ -402,7 +402,7 @@ class DataWriter:
                 ' cycle inverse modeling, model evaluation, and satellite validation studies. Please report'
                 ' errors and send comments regarding this product to the ObsPack originators. Please read'
                 ' carefully the ObsPack Fair Use statement and cite appropriately. DOI metadata for this'
-                f' product are available at https://search.datacite.org/works/{self.config.doi}.'
+                f' product are available at https://commons.datacite.org/doi.org/{self.config.doi}.'
                 ' Please visit http://www.gml.noaa.gov/ccgg/obspack/ for more information.'),
             'obspack_creation_date': self.obspack_creation_date,
             'obspack_warning': (
