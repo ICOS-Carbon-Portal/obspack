@@ -116,7 +116,7 @@ sampling_heights_to_skip: dict[str, list[float]] = {'BIR': [2.5], 'HUN': [96], '
 # (to be revised before each ObsPack release).
 deprecated_dobjs_to_use: dict[str, dict[str, dict[float, list[str]]]] = {
     'co2': {},
-    'ch4': {'HUN': {50: ['https://meta.icos-cp.eu/objects/fbBbk-WthWCXsAyN4UoZaZtY']}},
+    'ch4': {},
     'n2o': {},
     'co': {}
 }
