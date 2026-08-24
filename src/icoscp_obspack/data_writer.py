@@ -609,8 +609,8 @@ class DataWriter:
                 "station": self.station.org.self.uri,
                 "samplingHeight": self.height,
                 "production": {
-                    "creator": "http://meta.icos-cp.eu/resources/organizations/ICOS_RI",
-                    "contributors": self.author_uris,
+                    "creator": self.author_uris[0],
+                    "contributors": self.author_uris[1:],
                     "hostOrganization": "http://meta.icos-cp.eu/resources/organizations/CP",
                     "comment": (
                         f"This data file contains high accuracy European ObsPack observational timeseries"
