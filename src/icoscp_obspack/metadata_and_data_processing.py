@@ -74,6 +74,23 @@ first_dataset_id = {'co2': 1000, 'ch4': 2000, 'n2o': 3000, 'co': 4000}
 # in the configuration file.
 n_max_dobj = 200
 
+# Additional stations that are not included in ATMO_STATION yet but for which
+# some data has been released by ATC.
+additional_stations: list[StationLite] = [
+    StationLite(
+        uri='http://meta.icos-cp.eu/resources/stations/AS_INE',
+        label='Ineia (INE)', comments=[], id='INE', name='Ineia',
+        type_uri='http://meta.icos-cp.eu/ontologies/cpmeta/AS',
+        country_code='CY', lat=34.9621, lon=32.3777, elevation=660.0, geo_json=None
+    ),
+    StationLite(
+        uri='http://meta.icos-cp.eu/resources/stations/AS_VTI',
+        label='Valentia Island (VTI)', comments=[], id='VTI', name='Valentia Island',
+        type_uri='http://meta.icos-cp.eu/ontologies/cpmeta/AS',
+        country_code='IE', lat=51.908, lon=-10.4032, elevation=25.0, geo_json=None
+    )
+]
+
 # Additional authors for specific stations.
 additional_authors: dict[str, list[Author]] = {
     'HFD': [
@@ -93,7 +110,7 @@ gases_to_skip: dict[str, list[str]] = {
     'HEL': ['co'], 'HUN': ['n2o'], 'IPR': ['n2o'], 'PAL': ['n2o'], 'UTO': ['n2o'], 'WES': ['co']}
 
 # Sampling heights to skip for some stations (to be revised before each ObsPack release).
-sampling_heights_to_skip: dict[str, list[float]] = {'BIR': [2.5], 'HUN': [96], 'JFJ': [5]}
+sampling_heights_to_skip: dict[str, list[float]] = {'BIR': [2.5], 'HUN': [96], 'INE': [3], 'JFJ': [5]}
 
 # Data objects that are deprecated but should be included for some stations and sampling heights
 # (to be revised before each ObsPack release).
@@ -140,6 +157,7 @@ def main():
     earliest_dt: datetime | None = None
     latest_dt: datetime | None = None
     meta_stations = meta.list_stations(ATMO_STATION)
+    meta_stations.extend(additional_stations)
     n_stations = len(meta_stations)
     for n, station in enumerate(meta_stations):
         print(f'\n\n{"-"*122}\nStation {station.id} ({n+1}/{n_stations})\n{"-"*122}')
