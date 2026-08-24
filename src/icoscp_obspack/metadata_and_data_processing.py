@@ -351,11 +351,11 @@ def main():
             if n_heights > 1:
                 filename = '_'.join([
                     c.gas, station_id.lower(), 'tower-insitu', str(station_extra_info.lab_id),
-                    f'allvalid-{int(sampling_height)}magl'])
+                    f'{int(sampling_height)}magl'])
             else:
                 filename = '_'.join([
                     c.gas, station_id.lower(), 'surface-insitu', str(station_extra_info.lab_id),
-                    'allvalid'])
+                    f'{int(sampling_height)}magl'])
 
             if c.do_png:
                 plot_timeseries_station(

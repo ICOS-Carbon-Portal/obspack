@@ -352,7 +352,7 @@ class DataWriter:
                 f'https://meta.icos-cp.eu/station/?station=/resources/stations/AS_{self.station.id}'
                 '&icon=https://static.icos-cp.eu/share/stations/icons/as.png'),
             'dataset_selection': f'all hourly data from {self.height} magl intake',
-            'dataset_selection_tag': f'allvalid-{self.height}magl',
+            'dataset_selection_tag': f'all-{self.height}magl',
             'dataset_comment': (
                 'Please note that some datasets included in past Obspack releases are now provided'
                 ' by the ICOS program. The valid data selection scheme for ICOS datasets may differ'
