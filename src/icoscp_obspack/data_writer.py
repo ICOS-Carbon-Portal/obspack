@@ -28,6 +28,9 @@ HALF_INTERVAL_IN_SEC = round(DATA_FREQUENCY_IN_HOURS * 3600 / 2)
 # Reference point of the 'seconds since 1970-01-01T00:00:00Z' units of the time variables.
 EPOCH = pd.Timestamp('1970-01-01', tz='UTC')
 
+# Hard-coded country codes for stations that are missing one in the ICOS metadata
+COUNTRY_CODE = {'INE': 'CY', 'VTI': 'IE'}
+
 
 @dataclass(frozen=True)
 class StationExtraInfo:
@@ -313,7 +316,7 @@ class DataWriter:
         attributes: dict[str, Any] = {
             'site_code': self.station.id,
             'site_name': self.station.org.name,
-            'site_country': self.station.countryCode,
+            'site_country': self.station.countryCode or COUNTRY_CODE[self.station.id],
             'site_latitude': self.station.location.lat if self.station.location is not None else np.nan,
             'site_longitude': self.station.location.lon if self.station.location is not None else np.nan,
             'site_elevation': (
