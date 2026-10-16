@@ -10,7 +10,7 @@ from zipfile import ZipFile
 import pandas as pd
 from icoscp_core.icos import ATMO_STATION, data, meta
 from icoscp_core.metaclient import Station
-from icoscp_core.metacore import AtcStationSpecifics, DataObject, Person, SpatioTemporalMeta
+from icoscp_core.metacore import AtcStationSpecifics, DataObject, Person
 from icoscp_core.queries.stationlist import StationLite
 from icoscp_core.rolemeta import Membership
 from pandas._typing import DtypeArg
@@ -576,8 +576,6 @@ def combine_datasets(
     """
     data_per_type: dict[str, pd.DataFrame] = {}
     hashsums_of_used_dobjs: dict[str, list[str]] = {}
-    start_per_data_type: dict[str, datetime | None] = {}
-    stop_per_data_type: dict[str, datetime | None] = {}
     for loaded_dataset in loaded_datasets:
         dobj = loaded_dataset.dobj
         data_type = loaded_dataset.data_type
@@ -618,20 +616,6 @@ def combine_datasets(
         else:
             data_per_type[data_type] = dataset
             hashsums_of_used_dobjs.setdefault(data_type, []).append(dobj.hash)
-        # Extract first and last timestamp of each dataset using metadata.
-        if isinstance(dobj.specificInfo, SpatioTemporalMeta):
-            start_per_data_type[data_type] = \
-                datetime.fromisoformat(dobj.specificInfo.temporal.interval.start)
-            stop_per_data_type[data_type] = \
-                datetime.fromisoformat(dobj.specificInfo.temporal.interval.stop)
-        elif dobj.specificInfo.acquisition.interval is not None:
-            start_per_data_type[data_type] = \
-                datetime.fromisoformat(dobj.specificInfo.acquisition.interval.start)
-            stop_per_data_type[data_type] = \
-                datetime.fromisoformat(dobj.specificInfo.acquisition.interval.stop)
-        else:
-            start_per_data_type[data_type] = None
-            stop_per_data_type[data_type] = None
 
     hashsums_of_all_used_dobjs: list[str] = [
         hashsum for hashsums in hashsums_of_used_dobjs.values() for hashsum in hashsums]
@@ -639,40 +623,84 @@ def combine_datasets(
         loaded_dataset.dobj for loaded_dataset in loaded_datasets
         if loaded_dataset.dobj.hash in hashsums_of_all_used_dobjs]
 
-    # Combine the datasets of different data types.
-    # The data types are ordered in the sequence: 'historic' -> 'L2' -> 'fasttrack' -> 'nrt'
-    # The logic is that 'L2' data should have priority over 'historic' data
-    # and 'fasttrack' data should have priority over 'nrt' data.
-    # By definition, 'L2' and 'fasttrack' datasets are never supposed to overlap. If they do,
-    # 'L2' data should have priority over 'fasttrack' data.
-    if ('L2' in data_per_type.keys() and 'fasttrack' in data_per_type.keys()
-        and stop_per_data_type['L2'] is not None and start_per_data_type['fasttrack'] is not None
-        and (stop_per_data_type['L2'] > start_per_data_type['fasttrack'])):
-        print(
-            f'Overlap between L2 and FastTrack data for station {station_id} at sampling height '
-            f'{sampling_height} m.')
-        fasttrack_to_keep = data_per_type['fasttrack']['Datetime'] > stop_per_data_type['L2']
-        data_per_type['fasttrack'] = data_per_type['fasttrack'][fasttrack_to_keep]
-    full_dataset: pd.DataFrame
-    if 'L2' in data_per_type.keys():
-        if 'historic' in data_per_type.keys():
-            historic_to_keep = data_per_type['historic']['Datetime'] < start_per_data_type['L2']
-            full_dataset = pd.concat([data_per_type['historic'][historic_to_keep], data_per_type['L2']])
-        else:
-            full_dataset = data_per_type['L2']
-    elif 'historic' in data_per_type.keys():
-        full_dataset = data_per_type['historic']
-    else:
-        full_dataset = pd.DataFrame()
-    if 'fasttrack' in data_per_type.keys():
-        full_dataset = pd.concat([full_dataset, data_per_type['fasttrack']])
-        if 'nrt' in data_per_type.keys():
-            nrt_to_keep = data_per_type['nrt']['Datetime'] > stop_per_data_type['fasttrack']
-            full_dataset = pd.concat([full_dataset, data_per_type['nrt'][nrt_to_keep]])
-    elif 'nrt' in data_per_type.keys():
-        full_dataset = pd.concat([full_dataset, data_per_type['nrt']])
+    full_dataset = merge_by_priority(data_per_type, station_id, sampling_height)
 
     return full_dataset.set_index('Datetime'), used_dobjs
+
+def merge_by_priority(
+        data_per_type: dict[str, pd.DataFrame], station_id: str, sampling_height: float
+        ) -> pd.DataFrame:
+    """
+    Combine the datasets of the different data types into a single chronological one.
+
+    Two orderings are at play. The **priority on overlap**, which decides which data type wins
+    where two of them cover the same period, is: 'L2' over 'historic', 'L2' over 'fasttrack',
+    and 'fasttrack' over 'nrt'. Every 'L2' row is therefore always kept, and 'historic' only
+    contributes rows from before the level-2 data begins. The **concatenation sequence**, which
+    is merely chronological, is 'historic' -> 'L2' -> 'fasttrack' -> 'nrt': each of the last two
+    contributes only the rows that are more recent than everything already included.
+
+    The boundaries come from the data itself rather than from the temporal interval reported in
+    the metadata of the data objects. The two do not always agree, and where they disagree using
+    the metadata either leaves a gap (when a dataset's interval starts before its first row, the
+    preceding data type having already been cut) or produces duplicated timestamps (when the
+    interval starts after the first row). Note that this means data that a level-2 reprocessing
+    deliberately removed at the very beginning or the very end of its period can be filled in
+    again from another data type.
+
+    Every dataset is assumed to be sorted by time, which the source files are.
+    :param `data_per_type`:
+        One dataset per data type, as collected by `combine_datasets`.
+    :param `station_id`, `sampling_height`:
+        Only used to report overlaps between data types.
+    :return:
+        A pandas DataFrame combining the datasets, or an empty one if there is no data at all.
+    """
+    datasets_to_concatenate: list[pd.DataFrame] = []
+    # Latest timestamp among the rows included so far.
+    latest_datetime: datetime | None = None
+
+    def add(data_type: str, dataset: pd.DataFrame) -> None:
+        nonlocal latest_datetime
+        if dataset.empty:
+            return
+        datasets_to_concatenate.append(dataset)
+        latest_datetime = dataset['Datetime'].iloc[-1]
+        print(
+            f'  {data_type} contributed {len(dataset)} row(s) for'
+            f' {dataset["Datetime"].iloc[0]} - {dataset["Datetime"].iloc[-1]}.')
+
+    def report_overlap(data_type: str, rows_to_keep: pd.Series) -> None:
+        """Report the rows a data type loses to a data type of a higher priority."""
+        if not rows_to_keep.all():
+            print(
+                f'Overlap between {data_type} data and data of a higher priority for station'
+                f' {station_id} at sampling height {sampling_height} m.')
+
+    historic = data_per_type.get('historic')
+    level_2 = data_per_type.get('L2')
+    if level_2 is not None and not level_2.empty:
+        if historic is not None:
+            rows_to_keep = historic['Datetime'] < level_2['Datetime'].iloc[0]
+            report_overlap('historic', rows_to_keep)
+            add('historic', historic[rows_to_keep])
+        add('L2', level_2)
+    elif historic is not None:
+        add('historic', historic)
+
+    for data_type in ['fasttrack', 'nrt']:
+        dataset = data_per_type.get(data_type)
+        if dataset is None or dataset.empty:
+            continue
+        if latest_datetime is not None:
+            rows_to_keep = dataset['Datetime'] > latest_datetime
+            report_overlap(data_type, rows_to_keep)
+            dataset = dataset[rows_to_keep]
+        add(data_type, dataset)
+
+    if not datasets_to_concatenate:
+        return pd.DataFrame()
+    return pd.concat(datasets_to_concatenate)
 
 def get_dataset(dobj: DataObject, zip_dir: Path, use_cached_datafiles: bool) -> pd.DataFrame:
     path_to_file = Path(zip_dir, dobj.fileName)

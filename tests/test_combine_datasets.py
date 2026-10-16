@@ -1,7 +1,7 @@
 """Tests for the data-level merge logic.
 
 `combine_datasets` does no I/O, so it can be driven with plain stubs exposing only the two
-attributes it reads off a data object (`hash` and `specificInfo`). Keeping it that way is what
+attributes it reads off a data object (`hash` and `specification`). Keeping it that way is what
 makes these tests possible — see the "Data-level merge logic" section of CLAUDE.md.
 """
 # Standard library imports.
@@ -34,24 +34,13 @@ def utc(year: int, month: int = 1, day: int = 1, hour: int = 0) -> datetime:
 
 @dataclass(frozen=True)
 class StubDobj:
-    """The only attributes the code under test reads off a `DataObject`.
-
-    `specificInfo` deliberately exposes the `acquisition.interval` shape rather than a
-    `SpatioTemporalMeta`, which is the branch ATC data objects take.
-    """
+    """The only attributes the code under test reads off a `DataObject`."""
     hash: str
     data_type: str
-    interval_start: datetime
-    interval_stop: datetime
 
     @property
     def specification(self):
         return SimpleNamespace(self=SimpleNamespace(uri=TRACER.specs[self.data_type]))
-
-    @property
-    def specificInfo(self):  # noqa: N802 - mirrors the icoscp_core attribute name
-        return SimpleNamespace(acquisition=SimpleNamespace(interval=SimpleNamespace(
-            start=self.interval_start.isoformat(), stop=self.interval_stop.isoformat())))
 
 
 def normalised_frame(first: datetime, n_hours: int, data_type: str) -> pd.DataFrame:
@@ -64,17 +53,10 @@ def normalised_frame(first: datetime, n_hours: int, data_type: str) -> pd.DataFr
     })
 
 
-def loaded(
-        hash_: str, data_type: str, data_start: datetime, n_hours: int,
-        interval_start: datetime | None = None,
-        interval_stop: datetime | None = None) -> LoadedDataset:
-    """Build a LoadedDataset whose metadata interval can differ from its data range."""
-    data = normalised_frame(data_start, n_hours, data_type)
-    dobj = StubDobj(
-        hash=hash_, data_type=data_type,
-        interval_start=data_start if interval_start is None else interval_start,
-        interval_stop=data['Datetime'].iloc[-1] if interval_stop is None else interval_stop)
-    return LoadedDataset(dobj=dobj, data_type=data_type, data=data)
+def loaded(hash_: str, data_type: str, data_start: datetime, n_hours: int) -> LoadedDataset:
+    return LoadedDataset(
+        dobj=StubDobj(hash=hash_, data_type=data_type), data_type=data_type,
+        data=normalised_frame(data_start, n_hours, data_type))
 
 
 def levels_in_order(combined: pd.DataFrame) -> list[int]:
@@ -104,43 +86,61 @@ def test_no_datasets_of_a_type_leaves_that_type_out():
     assert [dobj.hash for dobj in used] == ['h']
 
 
-def test_historic_is_trimmed_at_the_l2_interval_from_metadata():
-    """The cut uses the L2 metadata start, not the first L2 data row."""
+def test_historic_is_trimmed_at_the_first_l2_row_leaving_no_gap():
+    """The cut uses the first L2 data row, so historic covers everything before it.
+
+    The temporal interval reported in the metadata is not consulted: were it used, historic
+    would be cut at the interval start and the stretch between that and the first L2 row would
+    be covered by neither data type.
+    """
     historic = loaded('h', 'historic', utc(2020, 1, 1), 24 * 10)          # Jan 1 -> Jan 10
-    l2 = loaded(
-        'l2', 'L2', utc(2020, 1, 6), 24 * 5,                              # data starts Jan 6
-        interval_start=utc(2020, 1, 5))                                   # metadata says Jan 5
+    l2 = loaded('l2', 'L2', utc(2020, 1, 6), 24 * 5)                      # Jan 6 -> Jan 10
 
     combined, _ = combine_datasets([historic, l2], STATION, HEIGHT, TRACER)
 
     kept_historic = combined[combined['Level'] == DATA_LEVEL_PER_TYPE['historic']]
-    assert kept_historic.index.max() < utc(2020, 1, 5)
-    # Jan 5 -> Jan 6 is covered by neither, because the metadata interval governs the cut.
+    assert kept_historic.index.max() == utc(2020, 1, 5, 23)
+    # Every hour from the start of historic to the end of L2 is covered exactly once.
     assert combined.index.min() == utc(2020, 1, 1)
+    assert not combined.index.duplicated().any()
+    assert len(combined) == 24 * 10
 
 
 def test_l2_takes_priority_over_fasttrack_where_they_overlap():
-    l2 = loaded('l2', 'L2', utc(2021, 1, 1), 24 * 10, interval_stop=utc(2021, 1, 8))
+    l2 = loaded('l2', 'L2', utc(2021, 1, 1), 24 * 10)                     # Jan 1 -> Jan 10
     fasttrack = loaded('ft', 'fasttrack', utc(2021, 1, 5), 24 * 10)       # overlaps Jan 5-10
 
     combined, used = combine_datasets([l2, fasttrack], STATION, HEIGHT, TRACER)
 
     kept_ft = combined[combined['Level'] == DATA_LEVEL_PER_TYPE['fasttrack']]
-    assert kept_ft.index.min() > utc(2021, 1, 8)
+    # L2 runs to Jan 10 23:00; FastTrack resumes on the next hour rather than replacing any of it.
+    assert kept_ft.index.min() == utc(2021, 1, 11)
     assert [dobj.hash for dobj in used] == ['l2', 'ft']
 
 
-def test_nrt_is_trimmed_at_the_fasttrack_interval_stop():
-    fasttrack = loaded('ft', 'fasttrack', utc(2022, 1, 1), 24 * 5, interval_stop=utc(2022, 1, 4))
-    nrt = loaded('nrt', 'nrt', utc(2022, 1, 3), 24 * 5)                   # overlaps Jan 3-4
+def test_nrt_is_trimmed_at_the_last_fasttrack_row():
+    fasttrack = loaded('ft', 'fasttrack', utc(2022, 1, 1), 24 * 5)        # Jan 1 -> Jan 5
+    nrt = loaded('nrt', 'nrt', utc(2022, 1, 3), 24 * 5)                   # overlaps Jan 3-5
 
     combined, _ = combine_datasets([fasttrack, nrt], STATION, HEIGHT, TRACER)
 
     kept_nrt = combined[combined['Level'] == DATA_LEVEL_PER_TYPE['nrt']]
-    assert kept_nrt.index.min() > utc(2022, 1, 4)
+    assert kept_nrt.index.min() == utc(2022, 1, 6)
 
 
-def test_nrt_is_kept_whole_when_there_is_no_fasttrack():
+def test_nrt_is_trimmed_against_l2_when_there_is_no_fasttrack():
+    """Level-2 and near-real-time data only, overlapping in time."""
+    l2 = loaded('l2', 'L2', utc(2022, 1, 1), 24 * 3)                      # Jan 1 -> Jan 3
+    nrt = loaded('nrt', 'nrt', utc(2022, 1, 2), 24 * 3)                   # overlaps Jan 2-3
+
+    combined, _ = combine_datasets([l2, nrt], STATION, HEIGHT, TRACER)
+
+    kept_nrt = combined[combined['Level'] == DATA_LEVEL_PER_TYPE['nrt']]
+    assert kept_nrt.index.min() == utc(2022, 1, 4)
+    assert not combined.index.duplicated().any()
+
+
+def test_nrt_is_kept_whole_when_it_does_not_overlap():
     l2 = loaded('l2', 'L2', utc(2022, 1, 1), 24)
     nrt = loaded('nrt', 'nrt', utc(2022, 1, 2), 24)
 
@@ -152,9 +152,9 @@ def test_nrt_is_kept_whole_when_there_is_no_fasttrack():
 
 def test_all_four_types_are_concatenated_in_priority_order():
     datasets = [
-        loaded('h', 'historic', utc(2014), 24, interval_stop=utc(2015)),
-        loaded('l2', 'L2', utc(2016), 24, interval_start=utc(2016), interval_stop=utc(2017)),
-        loaded('ft', 'fasttrack', utc(2018), 24, interval_stop=utc(2019)),
+        loaded('h', 'historic', utc(2014), 24),
+        loaded('l2', 'L2', utc(2016), 24),
+        loaded('ft', 'fasttrack', utc(2018), 24),
         loaded('nrt', 'nrt', utc(2020), 24),
     ]
 
@@ -170,9 +170,9 @@ def test_input_order_does_not_change_the_output_order():
     """Priority comes from the data type, not from the order objects arrive in."""
     datasets = [
         loaded('nrt', 'nrt', utc(2020), 24),
-        loaded('h', 'historic', utc(2014), 24, interval_stop=utc(2015)),
-        loaded('ft', 'fasttrack', utc(2018), 24, interval_stop=utc(2019)),
-        loaded('l2', 'L2', utc(2016), 24, interval_start=utc(2016), interval_stop=utc(2017)),
+        loaded('h', 'historic', utc(2014), 24),
+        loaded('ft', 'fasttrack', utc(2018), 24),
+        loaded('l2', 'L2', utc(2016), 24),
     ]
 
     combined, _ = combine_datasets(datasets, STATION, HEIGHT, TRACER)
@@ -255,7 +255,7 @@ def stub_get_dataset(monkeypatch):
 
 def test_load_datasets_normalises_columns(stub_get_dataset):
     stub_get_dataset['l2'] = raw_frame(utc(2020), 3, 'O')
-    dobj = StubDobj('l2', 'L2', utc(2020), utc(2021))
+    dobj = StubDobj('l2', 'L2')
 
     result = load_datasets([dobj], TRACER, False, 'unused', True)
 
@@ -274,7 +274,7 @@ def test_load_datasets_normalises_columns(stub_get_dataset):
 def test_load_datasets_keeps_only_the_good_flags_of_each_type(
         stub_get_dataset, data_type, expected_kept):
     stub_get_dataset['d'] = raw_frame(utc(2020), 30, 'OUN')
-    dobj = StubDobj('d', data_type, utc(2020), utc(2021))
+    dobj = StubDobj('d', data_type)
 
     result = load_datasets([dobj], TRACER, True, 'unused', True)
 
@@ -283,7 +283,7 @@ def test_load_datasets_keeps_only_the_good_flags_of_each_type(
 
 def test_load_datasets_keeps_every_row_when_flags_are_disabled(stub_get_dataset):
     stub_get_dataset['d'] = raw_frame(utc(2020), 30, 'OUN')
-    dobj = StubDobj('d', 'nrt', utc(2020), utc(2021))
+    dobj = StubDobj('d', 'nrt')
 
     result = load_datasets([dobj], TRACER, False, 'unused', True)
 
