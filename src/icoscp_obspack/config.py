@@ -10,29 +10,9 @@ import yaml
 
 # Local application/library specific imports.
 from icoscp_obspack.citation import doi_citation
+from icoscp_obspack.tracers import TRACERS, Tracer
 
 YAML_CONFIG = '../config.yml'
-
-
-@dataclass(frozen=True)
-class GasSpec:
-    """Constants describing one of the gases the application supports."""
-    conversion_factor: float
-    calibration_scale: str
-    plot_gas_label: str
-    plot_unit_label: str
-    plot_limy: tuple[int, int]
-
-
-# The gases the application supports. Adding an entry here is not sufficient on its own:
-# `specs_per_gas` and `first_dataset_id` in metadata_and_data_processing.py, and the object
-# specifications in data_writer.py, need a matching entry as well.
-GAS_SPECS: dict[str, GasSpec] = {
-    'co2': GasSpec(1e-6, 'WMO CO2 X2019', 'CO${_2}$', '[µmol/mol]', (380, 460)),
-    'ch4': GasSpec(1e-9, 'WMO X2004A', 'CH${_4}$', '[nmol/mol]', (1800, 2500)),
-    'n2o': GasSpec(1e-9, 'NOAA-2006A', 'N${_2}$O', '[nmol/mol]', (315, 370)),
-    'co': GasSpec(1e-9, 'WMO X2014A', 'CO', '[nmol/mol]', (0, 600)),
-}
 
 
 @dataclass()
@@ -88,10 +68,9 @@ class Config:
 
         # Reject an unsupported gas before any other work is done, so that the failure is
         # reported here rather than as a missing attribute much later in the run.
-        if config.gas not in GAS_SPECS:
-            possible_values = ', '.join(f"'{gas}'" for gas in GAS_SPECS)
+        if config.gas not in TRACERS:
+            possible_values = ', '.join(f"'{gas}'" for gas in TRACERS)
             raise ValueError(f'Invalid gas: {config.gas}.\nPossible values are {possible_values}.')
-        gas_spec = GAS_SPECS[config.gas]
 
         # Directories to be created by `create_output_directories()`. Collected while the paths
         # below are resolved, so that constructing a Config does not touch the filesystem.
@@ -159,11 +138,7 @@ class Config:
         self.file_icos_stations: Path = self._init_path(
             Path(self.input, 'icos_stations.csv'), config.icos_stations, 'file')
 
-        self.conversion_factor: float = gas_spec.conversion_factor
-        self.calibration_scale: str = gas_spec.calibration_scale
-        self.plot_gas_label: str = gas_spec.plot_gas_label
-        self.plot_unit_label: str = gas_spec.plot_unit_label
-        self.plot_limy: tuple[int, int] = gas_spec.plot_limy
+        self.tracer: Tracer = TRACERS[config.gas]
 
         self.default_author_weight: int = self._value_with_default(config.default_author_weight, 0)
         self.print_timing_messages: bool = self._value_with_default(config.print_timing_messages, False)

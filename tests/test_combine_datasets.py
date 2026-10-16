@@ -18,12 +18,12 @@ import icoscp_obspack.metadata_and_data_processing as mdp
 from icoscp_obspack.metadata_and_data_processing import (
     LoadedDataset,
     combine_datasets,
-    data_level_per_data_type,
     load_datasets,
-    specs_per_gas,
 )
+from icoscp_obspack.tracers import DATA_LEVEL_PER_TYPE, TRACERS
 
-GAS = 'co2'
+TRACER = TRACERS['co2']
+GAS = TRACER.key
 STATION = 'XXX'
 HEIGHT = 50.0
 
@@ -46,7 +46,7 @@ class StubDobj:
 
     @property
     def specification(self):
-        return SimpleNamespace(self=SimpleNamespace(uri=specs_per_gas[GAS][self.data_type]))
+        return SimpleNamespace(self=SimpleNamespace(uri=TRACER.specs[self.data_type]))
 
     @property
     def specificInfo(self):  # noqa: N802 - mirrors the icoscp_core attribute name
@@ -60,7 +60,7 @@ def normalised_frame(first: datetime, n_hours: int, data_type: str) -> pd.DataFr
     return pd.DataFrame({
         'Datetime': stamps,
         'Meas': [400.0 + i * 0.01 for i in range(n_hours)],
-        'Level': [data_level_per_data_type[data_type]] * n_hours,
+        'Level': [DATA_LEVEL_PER_TYPE[data_type]] * n_hours,
     })
 
 
@@ -89,7 +89,7 @@ def levels_in_order(combined: pd.DataFrame) -> list[int]:
 def test_a_single_dataset_passes_through_indexed_by_datetime():
     only = loaded('l2', 'L2', utc(2020), 10)
 
-    combined, used = combine_datasets([only], STATION, HEIGHT, GAS)
+    combined, used = combine_datasets([only], STATION, HEIGHT, TRACER)
 
     assert combined.index.name == 'Datetime'
     assert len(combined) == 10
@@ -98,9 +98,9 @@ def test_a_single_dataset_passes_through_indexed_by_datetime():
 
 def test_no_datasets_of_a_type_leaves_that_type_out():
     combined, used = combine_datasets(
-        [loaded('h', 'historic', utc(2015), 5)], STATION, HEIGHT, GAS)
+        [loaded('h', 'historic', utc(2015), 5)], STATION, HEIGHT, TRACER)
 
-    assert levels_in_order(combined) == [data_level_per_data_type['historic']]
+    assert levels_in_order(combined) == [DATA_LEVEL_PER_TYPE['historic']]
     assert [dobj.hash for dobj in used] == ['h']
 
 
@@ -111,9 +111,9 @@ def test_historic_is_trimmed_at_the_l2_interval_from_metadata():
         'l2', 'L2', utc(2020, 1, 6), 24 * 5,                              # data starts Jan 6
         interval_start=utc(2020, 1, 5))                                   # metadata says Jan 5
 
-    combined, _ = combine_datasets([historic, l2], STATION, HEIGHT, GAS)
+    combined, _ = combine_datasets([historic, l2], STATION, HEIGHT, TRACER)
 
-    kept_historic = combined[combined['Level'] == data_level_per_data_type['historic']]
+    kept_historic = combined[combined['Level'] == DATA_LEVEL_PER_TYPE['historic']]
     assert kept_historic.index.max() < utc(2020, 1, 5)
     # Jan 5 -> Jan 6 is covered by neither, because the metadata interval governs the cut.
     assert combined.index.min() == utc(2020, 1, 1)
@@ -123,9 +123,9 @@ def test_l2_takes_priority_over_fasttrack_where_they_overlap():
     l2 = loaded('l2', 'L2', utc(2021, 1, 1), 24 * 10, interval_stop=utc(2021, 1, 8))
     fasttrack = loaded('ft', 'fasttrack', utc(2021, 1, 5), 24 * 10)       # overlaps Jan 5-10
 
-    combined, used = combine_datasets([l2, fasttrack], STATION, HEIGHT, GAS)
+    combined, used = combine_datasets([l2, fasttrack], STATION, HEIGHT, TRACER)
 
-    kept_ft = combined[combined['Level'] == data_level_per_data_type['fasttrack']]
+    kept_ft = combined[combined['Level'] == DATA_LEVEL_PER_TYPE['fasttrack']]
     assert kept_ft.index.min() > utc(2021, 1, 8)
     assert [dobj.hash for dobj in used] == ['l2', 'ft']
 
@@ -134,9 +134,9 @@ def test_nrt_is_trimmed_at_the_fasttrack_interval_stop():
     fasttrack = loaded('ft', 'fasttrack', utc(2022, 1, 1), 24 * 5, interval_stop=utc(2022, 1, 4))
     nrt = loaded('nrt', 'nrt', utc(2022, 1, 3), 24 * 5)                   # overlaps Jan 3-4
 
-    combined, _ = combine_datasets([fasttrack, nrt], STATION, HEIGHT, GAS)
+    combined, _ = combine_datasets([fasttrack, nrt], STATION, HEIGHT, TRACER)
 
-    kept_nrt = combined[combined['Level'] == data_level_per_data_type['nrt']]
+    kept_nrt = combined[combined['Level'] == DATA_LEVEL_PER_TYPE['nrt']]
     assert kept_nrt.index.min() > utc(2022, 1, 4)
 
 
@@ -144,9 +144,9 @@ def test_nrt_is_kept_whole_when_there_is_no_fasttrack():
     l2 = loaded('l2', 'L2', utc(2022, 1, 1), 24)
     nrt = loaded('nrt', 'nrt', utc(2022, 1, 2), 24)
 
-    combined, _ = combine_datasets([l2, nrt], STATION, HEIGHT, GAS)
+    combined, _ = combine_datasets([l2, nrt], STATION, HEIGHT, TRACER)
 
-    kept_nrt = combined[combined['Level'] == data_level_per_data_type['nrt']]
+    kept_nrt = combined[combined['Level'] == DATA_LEVEL_PER_TYPE['nrt']]
     assert len(kept_nrt) == 24
 
 
@@ -158,11 +158,11 @@ def test_all_four_types_are_concatenated_in_priority_order():
         loaded('nrt', 'nrt', utc(2020), 24),
     ]
 
-    combined, used = combine_datasets(datasets, STATION, HEIGHT, GAS)
+    combined, used = combine_datasets(datasets, STATION, HEIGHT, TRACER)
 
     assert levels_in_order(combined) == [
-        data_level_per_data_type['historic'], data_level_per_data_type['L2'],
-        data_level_per_data_type['fasttrack'], data_level_per_data_type['nrt']]
+        DATA_LEVEL_PER_TYPE['historic'], DATA_LEVEL_PER_TYPE['L2'],
+        DATA_LEVEL_PER_TYPE['fasttrack'], DATA_LEVEL_PER_TYPE['nrt']]
     assert [dobj.hash for dobj in used] == ['h', 'l2', 'ft', 'nrt']
 
 
@@ -175,11 +175,11 @@ def test_input_order_does_not_change_the_output_order():
         loaded('l2', 'L2', utc(2016), 24, interval_start=utc(2016), interval_stop=utc(2017)),
     ]
 
-    combined, _ = combine_datasets(datasets, STATION, HEIGHT, GAS)
+    combined, _ = combine_datasets(datasets, STATION, HEIGHT, TRACER)
 
     assert levels_in_order(combined) == [
-        data_level_per_data_type['historic'], data_level_per_data_type['L2'],
-        data_level_per_data_type['fasttrack'], data_level_per_data_type['nrt']]
+        DATA_LEVEL_PER_TYPE['historic'], DATA_LEVEL_PER_TYPE['L2'],
+        DATA_LEVEL_PER_TYPE['fasttrack'], DATA_LEVEL_PER_TYPE['nrt']]
 
 
 def test_a_deprecated_duplicate_is_concatenated_rather_than_discarded(monkeypatch):
@@ -192,7 +192,7 @@ def test_a_deprecated_duplicate_is_concatenated_rather_than_discarded(monkeypatc
     current = loaded('l2', 'L2', utc(2021), 24)
     earlier = loaded(extra_hash, 'L2', utc(2019), 24)     # ends before `current` begins
 
-    combined, used = combine_datasets([current, earlier], STATION, HEIGHT, GAS)
+    combined, used = combine_datasets([current, earlier], STATION, HEIGHT, TRACER)
 
     assert len(combined) == 48
     assert combined.index.min() == utc(2019)
@@ -208,7 +208,7 @@ def test_the_most_recent_dataset_wins_when_a_type_is_duplicated():
     older = loaded('older', 'L2', utc(2020), 5)
     newer = loaded('newer', 'L2', utc(2021), 9)
 
-    combined, used = combine_datasets([older, newer], STATION, HEIGHT, GAS)
+    combined, used = combine_datasets([older, newer], STATION, HEIGHT, TRACER)
 
     assert [dobj.hash for dobj in used] == ['newer']
     assert len(combined) == 9
@@ -220,7 +220,7 @@ def test_an_older_duplicate_does_not_displace_the_dataset_in_place():
     newer = loaded('newer', 'L2', utc(2021), 9)
     older = loaded('older', 'L2', utc(2020), 5)
 
-    combined, used = combine_datasets([newer, older], STATION, HEIGHT, GAS)
+    combined, used = combine_datasets([newer, older], STATION, HEIGHT, TRACER)
 
     assert [dobj.hash for dobj in used] == ['newer']
     assert len(combined) == 9
@@ -257,14 +257,14 @@ def test_load_datasets_normalises_columns(stub_get_dataset):
     stub_get_dataset['l2'] = raw_frame(utc(2020), 3, 'O')
     dobj = StubDobj('l2', 'L2', utc(2020), utc(2021))
 
-    result = load_datasets([dobj], GAS, False, 'unused', True)
+    result = load_datasets([dobj], TRACER, False, 'unused', True)
 
     assert len(result) == 1
     data = result[0].data
     assert result[0].data_type == 'L2'
     assert {'JulDate', 'Meas', 'Datetime', 'Level'} <= set(data.columns)
     assert GAS not in data.columns                      # renamed to 'Meas'
-    assert data['Level'].unique().tolist() == [data_level_per_data_type['L2']]
+    assert data['Level'].unique().tolist() == [DATA_LEVEL_PER_TYPE['L2']]
     assert data['Datetime'].iloc[0] == utc(2020)
 
 
@@ -276,7 +276,7 @@ def test_load_datasets_keeps_only_the_good_flags_of_each_type(
     stub_get_dataset['d'] = raw_frame(utc(2020), 30, 'OUN')
     dobj = StubDobj('d', data_type, utc(2020), utc(2021))
 
-    result = load_datasets([dobj], GAS, True, 'unused', True)
+    result = load_datasets([dobj], TRACER, True, 'unused', True)
 
     assert sorted(result[0].data['Flag'].unique()) == expected_kept
 
@@ -285,7 +285,7 @@ def test_load_datasets_keeps_every_row_when_flags_are_disabled(stub_get_dataset)
     stub_get_dataset['d'] = raw_frame(utc(2020), 30, 'OUN')
     dobj = StubDobj('d', 'nrt', utc(2020), utc(2021))
 
-    result = load_datasets([dobj], GAS, False, 'unused', True)
+    result = load_datasets([dobj], TRACER, False, 'unused', True)
 
     assert len(result[0].data) == 30
 
@@ -295,4 +295,4 @@ def test_load_datasets_ignores_objects_of_another_specification(stub_get_dataset
         hash='other',
         specification=SimpleNamespace(self=SimpleNamespace(uri='http://example.org/not-a-gas-spec')))
 
-    assert load_datasets([other], GAS, True, 'unused', True) == []
+    assert load_datasets([other], TRACER, True, 'unused', True) == []

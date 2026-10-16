@@ -17,6 +17,7 @@ from icoscp_core.sparql import BoundUri, SparqlResults
 # Local application/library specific imports.
 from icoscp_obspack.citation import AuthorWithWeight
 from icoscp_obspack.config import Config
+from icoscp_obspack.tracers import TRACERS
 from icoscp_obspack.utils import extract_temporal_components, get_hash_sum, timeit, year_fraction
 
 # Averaging interval of the input data, advertised to users through the netCDF attribute
@@ -167,12 +168,13 @@ class DataWriter:
             ' of the averaging interval (dataset_data_frequency). For uneven averaging intervals times are'
             ' rounded down to the nearest second.')
 
+        tracer = self.config.tracer
         self.netcdf_dataset.createVariable('value', 'f4', ('time',), fill_value=np.nan, zlib=True)
         self.netcdf_dataset['value'].long_name = 'measured_mole_fraction_of_trace_gas_in_dry_air'
-        self.netcdf_dataset['value'].standard_name = f'mole_fraction_of_{self.config.gas}_in_dry_air'
+        self.netcdf_dataset['value'].standard_name = tracer.value_standard_name
         self.netcdf_dataset['value'].units = 'mol mol-1'
         self.netcdf_dataset['value'].comment = 'mole per mole of dry air'
-        self.netcdf_dataset['value'].scale_comment = self.config.calibration_scale
+        self.netcdf_dataset['value'].scale_comment = tracer.calibration_scale
 
         self.netcdf_dataset.createVariable('nvalue', 'i4', ('time',), fill_value=-9, zlib=True)
         self.netcdf_dataset['nvalue'].long_name = 'number_of_measurements_contributing_to_reported_value'
@@ -303,15 +305,6 @@ class DataWriter:
         Most value are default and copied from Obspack V7 2021 and some need to be replaced
         with actual info before writing to netCDF.
         """
-        if self.config.gas == 'co2':
-            warning = (
-                'In Feb 2021, NOAA updated the WMO CO2 scale from version X2007 to X2019 (Hall et al., 2021).'
-                ' The X2019 scale supersedes all previous versions of the WMO scale and is used in this GV+'
-                ' release. Values contributed on scales other than X2019 have been adjusted by either known'
-                ' scale offsets or with the known X2019 to X2007 relationship to account for changes'
-                ' in the scale relationship caused by the X2019 revision.')
-        else:
-            warning = ''
 
         attributes: dict[str, Any] = {
             'site_code': self.station.id,
@@ -335,7 +328,7 @@ class DataWriter:
                 ' (Local Standard Time).'),
             'site_url': self.station.org.self.uri,
             'site_oscar_id': self.station_extra_info.oscar_id,
-            'warning_dataset_scale': warning,
+            'warning_dataset_scale': self.config.tracer.scale_warning,
             'dataset_creation_date': self.dataset_creation_data.isoformat().replace('+00:00', 'Z'),
             'dataset_num': self.nc_cnt,
             'dataset_name': self.filename,
@@ -361,7 +354,7 @@ class DataWriter:
                 ' by the ICOS program. The valid data selection scheme for ICOS datasets may differ'
                 ' significantly from the selection scheme provided previously by contributing laboratories.'),
             'dataset_contains_ICOS_L1_and_or_L2_data': self.station_extra_info.icos_labeled,
-            'dataset_calibration_scale': self.config.calibration_scale,
+            'dataset_calibration_scale': self.config.tracer.calibration_scale,
             'dataset_start_date': self.data.index[0].isoformat().replace('+00:00', 'Z'),
             'dataset_stop_date': self.data.index[-1].isoformat().replace('+00:00', 'Z'),
             'dataset_data_frequency': DATA_FREQUENCY_IN_HOURS,
@@ -494,7 +487,7 @@ class DataWriter:
                 self.netcdf_dataset[variable][:] = \
                     np.array(values, f"S{var_shape[1]}").view("S1").reshape(var_shape)
             elif variable in ['value', 'value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB']:
-                new_values = values*self.config.conversion_factor
+                new_values = values*self.config.tracer.conversion_factor
                 if variable != 'icos_STTB':
                     new_values[new_values < 0] = np.nan
                 self.netcdf_dataset[variable][:] = new_values
@@ -586,21 +579,7 @@ class DataWriter:
 
     def _generate_metadata(self) -> dict[str, Any]:
         """Generate and upload metadata."""
-        if self.config.gas == 'co2':
-            gas_species = 'CO2'
-            obj_spec = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackTimeSerieResult'
-        elif self.config.gas == 'ch4':
-            gas_species = 'CH4'
-            obj_spec = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackCH4TimeSeriesResult'
-        elif self.config.gas == 'n2o':
-            gas_species = 'N2O'
-            obj_spec = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackN2oTimeSeriesResult'
-        elif self.config.gas == 'co':
-            gas_species = 'CO'
-            obj_spec = 'http://meta.icos-cp.eu/resources/cpmeta/ObspackCOTimeSeriesResult'
-        else:
-            gas_species = ''
-            obj_spec = ''
+        tracer = self.config.tracer
 
         hashsum_of_previous_version = get_prev_by_name(filename=self.path_to_netcdf_file.name)
 
@@ -617,14 +596,14 @@ class DataWriter:
                     "hostOrganization": "http://meta.icos-cp.eu/resources/organizations/CP",
                     "comment": (
                         f"This data file contains high accuracy European ObsPack observational timeseries"
-                        f" in netCDF format of ambient mole fraction of {gas_species} in dry air"
+                        f" in netCDF format of {tracer.metadata_quantity}"
                         f" collected at {self.station.org.name} ({self.height} m). The measurements were"
-                        f" calibrated using the WMO GAW calibration scale {self.config.calibration_scale}."
+                        f" calibrated using the WMO GAW calibration scale {tracer.calibration_scale}."
                         f" Included are (all whenever available) historical PI QCed data, ICOS Level 2 data,"
                         f" ICOS FastTrack data and ICOS NRT data."
                         f" It is part of {self.config.obspack_product_description} and is intended for use"
                         f" in carbon cycle inverse modeling, model evaluation, and satellite validation"
-                        f" studies. Metadata for the full {gas_species} product release are available"
+                        f" studies. Metadata for the full {tracer.gas_species} product release are available"
                         f" at https://commons.datacite.org/doi.org/{self.config.doi}."
                         f" Please also visit http://www.gml.noaa.gov/ccgg/obspack/ for more information."
                         f" If you use these data in your research, please consider citing the full ObsPack"
@@ -634,11 +613,10 @@ class DataWriter:
                     "sources": self.hashsums
                 }
             },
-            "objectSpecification": obj_spec,
+            "objectSpecification": tracer.obspack_obj_spec,
             "references": {
                 "autodeprecateSameFilenameObjects": True,
-                "keywords": [
-                    self.config.calibration_scale, f"atmospheric dry air {self.config.gas} mole fraction"]
+                "keywords": [tracer.calibration_scale, tracer.metadata_keyword]
             }
         }
 
@@ -650,15 +628,17 @@ class DataWriter:
 
 
 def get_prev_by_name(filename: str) -> str | None:
+    # Every ObsPack result specification, so that a dataset finds its previous version whichever
+    # tracer it is about.
+    specs = '\n'.join(
+        f'            <{tracer.obspack_obj_spec}>'
+        for tracer in TRACERS.values() if tracer.obspack_obj_spec)
     query = f"""
     PREFIX cpmeta: <http://meta.icos-cp.eu/ontologies/cpmeta/>
     SELECT ?dobj
     WHERE {{
         VALUES ?spec {{
-            <http://meta.icos-cp.eu/resources/cpmeta/ObspackTimeSerieResult>
-            <http://meta.icos-cp.eu/resources/cpmeta/ObspackCH4TimeSeriesResult>
-            <http://meta.icos-cp.eu/resources/cpmeta/ObspackN2oTimeSeriesResult>
-            <http://meta.icos-cp.eu/resources/cpmeta/ObspackCOTimeSeriesResult>
+{specs}
         }}
         ?dobj cpmeta:hasObjectSpec ?spec .
         ?dobj cpmeta:hasName ?fileName .

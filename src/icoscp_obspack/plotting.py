@@ -46,13 +46,14 @@ def plot_timeseries_station(
         if latest_measurement_dt is not None else year_fraction(datetime.now(tz=timezone.utc))
     fig = plt.figure(figsize=(15, 8))
     ax = fig.add_axes(rect=(0.125, 0.115, 0.775, 0.775))
+    tracer = config.tracer
     ax.set_title(
-        f'{config.plot_gas_label} at {station_and_height}; measurements, trend and seasonal signal',
+        f'{tracer.plot_gas_label} at {station_and_height}; measurements, trend and seasonal signal',
         fontsize=18)
     ax.set_xlabel('Year', fontsize=14)
-    ax.set_ylabel(f'{config.plot_gas_label} {config.plot_unit_label}', fontsize=14)
+    ax.set_ylabel(f'{tracer.plot_gas_label} {tracer.plot_unit_label}', fontsize=14)
     ax.set_xlim(2010, last_time + 0.25)
-    ax.set_ylim(*config.plot_limy)
+    ax.set_ylim(*tracer.plot_limy)
     ax.set_xticks(range(2010, int(last_time + 0.25) + 1))
     ax.grid(zorder=0, linestyle='-.', color='grey')
     ax.set_facecolor('whitesmoke')

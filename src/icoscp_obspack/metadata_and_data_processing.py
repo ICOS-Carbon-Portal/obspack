@@ -29,45 +29,17 @@ from icoscp_obspack.geo_json import (
     save_geo_json_pickle,
 )
 from icoscp_obspack.plotting import get_global_average, ghg_filter_ts, plot_timeseries_station
+from icoscp_obspack.tracers import (
+    DATA_LEVEL_PER_TYPE,
+    FASTTRACK_SPEC,
+    GOOD_FLAGS_PER_TYPE,
+    Tracer,
+)
 from icoscp_obspack.utils import timeit
 
-fasttrack_spec = 'http://meta.icos-cp.eu/resources/cpmeta/atcGHGFastTrackNRTDataObject'
-specs_per_gas = {
-    'co2': {
-        'historic': 'http://meta.icos-cp.eu/resources/cpmeta/atcCo2Product',
-        'L2': 'http://meta.icos-cp.eu/resources/cpmeta/atcCo2L2DataObject',
-        'fasttrack': fasttrack_spec,
-        'nrt': 'http://meta.icos-cp.eu/resources/cpmeta/atcCo2NrtGrowingDataObject'},
-    'ch4': {
-        'historic': 'http://meta.icos-cp.eu/resources/cpmeta/atcCh4Product',
-        'L2': 'http://meta.icos-cp.eu/resources/cpmeta/atcCh4L2DataObject',
-        'fasttrack': fasttrack_spec,
-        'nrt': 'http://meta.icos-cp.eu/resources/cpmeta/atcCh4NrtGrowingDataObject'},
-    'n2o': {
-        'historic': 'http://meta.icos-cp.eu/resources/cpmeta/atcN2oProduct',
-        'L2': 'http://meta.icos-cp.eu/resources/cpmeta/atcN2oL2DataObject',
-        'fasttrack': fasttrack_spec,
-        'nrt': 'http://meta.icos-cp.eu/resources/cpmeta/atcN2oNrtGrowingDataObject'},
-    'co': {
-        'historic': 'http://meta.icos-cp.eu/resources/cpmeta/atcCoProduct',
-        'L2': 'http://meta.icos-cp.eu/resources/cpmeta/atcCoL2DataObject',
-        'fasttrack': fasttrack_spec,
-        'nrt': 'http://meta.icos-cp.eu/resources/cpmeta/atcCoNrtGrowingDataObject'}
-}
-
-data_level_per_data_type = {'historic': 0, 'L2': 2, 'fasttrack': 15, 'nrt': 1}
-
-# Flags indicating data to be kept if the configuration parameter 'use_flags' is True
-# depending on the ICOS data level of the dataset.
-# 'historic' and 'L2' are level 2, while 'fasttrack' and 'nrt' are level 1.
-good_flags_per_data_type = {
-    'historic': ['O', 'U'],
-    'L2': ['O', 'U'],
-    'fasttrack': ['O', 'U'],
-    'nrt': ['U']}
-
-# Unique dataset ID in the obspack product.
-first_dataset_id = {'co2': 1000, 'ch4': 2000, 'n2o': 3000, 'co': 4000}
+# Everything specific to a tracer comes from its descriptor (see tracers.py). Adding support for
+# a tracer is done by adding a descriptor there; nothing in this module branches on the tracer's
+# identity.
 
 # Maximum number of data objects that can be found for a given station and gas species.
 # This limit is not expected to be reached anytime soon at any station, so it is not included
@@ -182,7 +154,7 @@ def main():
         fetching_station_info_end_time = timeit(fetching_station_info_start_time, f'Collect metadata and authors for station {station.id}', c.print_timing_messages)
 
         # Find all relevant data objects for a given station and separate them by sampling height.
-        dobjs_per_sampling_height = dobjs_from_station_by_sampling_height(station, c.gas)
+        dobjs_per_sampling_height = dobjs_from_station_by_sampling_height(station, c.tracer)
         if len(dobjs_per_sampling_height) == 0:
             continue
         _ = timeit(fetching_station_info_end_time, f'Find data objects for station {station.id} and organize them by sampling height', c.print_timing_messages)
@@ -218,9 +190,9 @@ def main():
             # Read the data files, then produce one dataset (pandas.DataFrame) with all datasets
             # from the current station and sampling height.
             loaded_datasets = load_datasets(
-                dobjs_at_sampling_height, c.gas, c.useflags, c.zip, c.use_cached_datafiles)
+                dobjs_at_sampling_height, c.tracer, c.useflags, c.zip, c.use_cached_datafiles)
             data_at_sampling_height, used_dobjs_at_sampling_height = combine_datasets(
-                loaded_datasets, station.id, sampling_height, c.gas)
+                loaded_datasets, station.id, sampling_height, c.tracer)
             if data_at_sampling_height.empty:
                 print(f'No data found for station {station.id} and sampling height {sampling_height} m.')
                 continue
@@ -336,7 +308,7 @@ def main():
     station_counter = 0
     row_counter = 0
     nc_files_info_for_uploader: list[NetcdfFileInfoForUploader] = []
-    dataset_id = first_dataset_id[c.gas]
+    dataset_id = c.tracer.first_dataset_id
     obspack_name = create_obspack_release_name(c, writing_data_start_time)
     obspack_citation = doi_citation(c.doi)
     for station_id, station_content in content_from_all_sampling_heights.items():
@@ -440,9 +412,9 @@ def extract_station_extra_info(
     return station_extra_info
 
 def dobjs_from_station_by_sampling_height(
-        station: StationLite, gas: str) -> dict[float, list[DataObject]]:
+        station: StationLite, tracer: Tracer) -> dict[float, list[DataObject]]:
     dobjs_per_sampling_height: dict[float, list[DataObject]] = {}
-    specs = list(specs_per_gas[gas].values())
+    specs = list(tracer.specs.values())
     dobjs_lite = meta.list_data_objects(datatype=specs, station=station, limit=n_max_dobj)
     if len(dobjs_lite) == n_max_dobj:
         print(
@@ -458,8 +430,8 @@ def dobjs_from_station_by_sampling_height(
         # FastTrack objects all have the same specification, no matter which gas species' data
         # they contain. The filename allows to determine which gas species the file is about.
         elif (
-            dobj_lite.datatype_uri == fasttrack_spec
-            and dobj_lite.filename.split('.')[-2].split('_')[-1].lower() != gas):
+            dobj_lite.datatype_uri == FASTTRACK_SPEC
+            and dobj_lite.filename.split('.')[-2].split('_')[-1].lower() != tracer.key):
             continue
         else:
             sampling_height = dobj_lite.sampling_height
@@ -470,9 +442,9 @@ def dobjs_from_station_by_sampling_height(
                 .setdefault(sampling_height, [])\
                 .append(meta.get_dobj_meta(dobj_lite))
     # Add deprecated data objects for some stations and sampling heights.
-    if station.id in deprecated_dobjs_to_use[gas].keys():
-        for h, urls in deprecated_dobjs_to_use[gas][station.id].items():
-            dobjs_per_sampling_height.setdefault(h, []).extend([meta.get_dobj_meta(url) for url in urls])
+    deprecated_dobjs_at_station = deprecated_dobjs_to_use.get(tracer.key, {}).get(station.id, {})
+    for h, urls in deprecated_dobjs_at_station.items():
+        dobjs_per_sampling_height.setdefault(h, []).extend([meta.get_dobj_meta(url) for url in urls])
     return dobjs_per_sampling_height
 
 def author_from_membership(membership: Membership) -> Author:
@@ -549,22 +521,23 @@ def clean_and_sort_authors(authors: list[Author], default_weight: int) -> list[A
     return authors_cleaned
 
 def load_datasets(
-        dobjs: list[DataObject], gas: str, use_flags: bool, zip_dir: Path,
+        dobjs: list[DataObject], tracer: Tracer, use_flags: bool, zip_dir: Path,
         use_cached_datafiles: bool) -> list[LoadedDataset]:
     """
-    Read and normalize the content of every data object that holds data about `gas`.
+    Read and normalize the content of every data object that holds data about `tracer`.
     This is the only part of the combination that reads files or accesses the network, so that
     `combine_datasets` can work purely on the result.
     :param `dobjs`:
         A list of `DataObject` that are related to a station and sampling height.
-    :param `gas`:
-        The gas species being processed.
+    :param `tracer`:
+        The tracer being processed. Its `value_column` names the column holding the measurement
+        in the data files.
     :param `use_flags`:
         Whether to keep only the data points whose quality flag is considered good.
     :param `zip_dir`, `use_cached_datafiles`:
         Passed on to `get_dataset`.
     :return:
-        One `LoadedDataset` per data object holding data about `gas`, in the order of `dobjs`.
+        One `LoadedDataset` per data object holding data about `tracer`, in the order of `dobjs`.
     """
 
     def get_datetime(s: pd.Series) -> datetime:
@@ -572,20 +545,21 @@ def load_datasets(
 
     loaded_datasets: list[LoadedDataset] = []
     for dobj in dobjs:
-        for data_type in ['historic', 'L2', 'fasttrack', 'nrt']:
-            if dobj.specification.self.uri == specs_per_gas[gas][data_type]:
+        for data_type, spec in tracer.specs.items():
+            if dobj.specification.self.uri == spec:
                 dataset: pd.DataFrame = get_dataset(dobj, zip_dir, use_cached_datafiles)
-                dataset = dataset.rename({'DecimalDate': 'JulDate', gas: 'Meas'}, axis=1)
+                dataset = dataset.rename(
+                    {'DecimalDate': 'JulDate', tracer.value_column: 'Meas'}, axis=1)
                 dataset['Datetime'] = dataset.apply(get_datetime, axis=1)
-                dataset['Level'] = data_level_per_data_type[data_type]
+                dataset['Level'] = DATA_LEVEL_PER_TYPE[data_type]
                 if use_flags:
-                    dataset = dataset[dataset['Flag'].isin(good_flags_per_data_type[data_type])]
+                    dataset = dataset[dataset['Flag'].isin(GOOD_FLAGS_PER_TYPE[data_type])]
                 loaded_datasets.append(LoadedDataset(dobj=dobj, data_type=data_type, data=dataset))
     return loaded_datasets
 
 def combine_datasets(
-        loaded_datasets: list[LoadedDataset], station_id: str, sampling_height: float, gas: str
-        ) -> tuple[pd.DataFrame, list[DataObject]]:
+        loaded_datasets: list[LoadedDataset], station_id: str, sampling_height: float,
+        tracer: Tracer) -> tuple[pd.DataFrame, list[DataObject]]:
     """
     Combine the datasets of a given station and sampling height into a single one.
     Performs no I/O; the datasets are read beforehand by `load_datasets`.
@@ -595,8 +569,8 @@ def combine_datasets(
         Station ID code.
     :param `sampling_height`:
         Sampling height in meters.
-    :param `gas`:
-        The gas species being processed.
+    :param `tracer`:
+        The tracer being processed.
     :return:
         A pandas DataFrame combining all datasets and the list of data objects that were used.
     """
@@ -612,11 +586,13 @@ def combine_datasets(
         # If more than one is found, keep the one with the most recent data unless the additional
         # datasets were added manually among the deprecated datasets that need to be included.
         if data_type in data_per_type.keys():
+            deprecated_dobjs_at_sampling_height = (
+                deprecated_dobjs_to_use.get(tracer.key, {})
+                .get(station_id, {})
+                .get(sampling_height, []))
             additional_dobj_is_needed = (
-                station_id in deprecated_dobjs_to_use[gas].keys()
-                and sampling_height in deprecated_dobjs_to_use[gas][station_id].keys()
-                and f'https://meta.icos-cp.eu/objects/{dobj.hash[:24]}'
-                in deprecated_dobjs_to_use[gas][station_id][sampling_height])
+                f'https://meta.icos-cp.eu/objects/{dobj.hash[:24]}'
+                in deprecated_dobjs_at_sampling_height)
             if additional_dobj_is_needed:
                 if dataset['Datetime'].iloc[-1] < data_per_type[data_type]['Datetime'].iloc[0]:
                     data_per_type[data_type] = pd.concat([dataset, data_per_type[data_type]])
