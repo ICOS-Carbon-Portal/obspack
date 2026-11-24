@@ -1,9 +1,10 @@
 """Per-tracer descriptors.
 
 A single place capturing everything that varies between the tracers the application supports:
-data object specifications, the source column holding the measured value, the unit conversion,
-the CF standard name, the calibration scale, the dataset ID block, the plot labels and the
-ObsPack object specification used when uploading individual datasets.
+data object specifications, the source columns holding the measured value and its standard
+deviation, the units and wording of the netCDF `value` variable, the unit conversion, the
+calibration scale, the dataset ID block, the plot labels and the ObsPack object specification
+used when uploading individual datasets.
 
 Adding a tracer means adding a descriptor to `TRACERS` and nothing else: the rest of the
 application reads these fields rather than branching on the tracer's identity.
@@ -13,8 +14,11 @@ from dataclasses import dataclass
 
 CPMETA = 'http://meta.icos-cp.eu/resources/cpmeta/'
 
-# The FastTrack specification is shared by CO2, CH4, N2O and CO: one file per station holds the
-# data of all four gases, and only the file name tells which gas a file is about.
+# One FastTrack specification is shared by CO2, CH4, N2O and CO. Despite its name, each
+# object still holds a single tracer; it is the specification that does not distinguish them, so
+# the tracer has to be read from the file name, whose last underscore-separated token before the
+# archive extension names it ('..._WAO_10.0_CTS_CO2.zip'). Tracers whose 'fasttrack' spec is this
+# one need that disambiguation, the others do not.
 FASTTRACK_SPEC = f'{CPMETA}atcGHGFastTrackNRTDataObject'
 
 # ICOS data release level per data type. Shared by all tracers.
@@ -28,6 +32,13 @@ GOOD_FLAGS_PER_TYPE: dict[str, list[str]] = {
     'fasttrack': ['O', 'U'],
     'nrt': ['U']}
 
+# How each data type is referred to in the metadata of individual datasets.
+DATA_TYPE_DESCRIPTIONS: dict[str, str] = {
+    'historic': 'historical PI QCed data',
+    'L2': 'ICOS Level 2 data',
+    'fasttrack': 'ICOS FastTrack data',
+    'nrt': 'ICOS NRT data'}
+
 
 @dataclass(frozen=True)
 class Tracer:
@@ -36,17 +47,31 @@ class Tracer:
     # Identity. Used as the configuration value, the output directory, the first component of
     # every produced file name and the 'dataset_parameter' netCDF attribute.
     key: str
-    # Source column holding the measured value. Renamed to 'Meas' when a data file is read.
+    # Source columns holding the measured value and its standard deviation. Renamed to 'Meas'
+    # and 'Stdev' when a data file is read.
     value_column: str
+    std_column: str
     # Data type -> data object specification URI.
     specs: dict[str, str]
     # Base of the unique per-dataset ID counter in the ObsPack product.
     first_dataset_id: int
     # Source values are multiplied by this before being written to the netCDF file.
     conversion_factor: float
-    # CF standard name of the 'value' variable.
+    # Whether negative values are physically impossible and should be set to NaN. True for mole
+    # fractions, False for radon activity concentrations, which are near zero and noisy, and for
+    # Delta-14C, which is routinely negative. Note that for the mole fractions this is also what
+    # disposes of the missing value sentinel, the only negative value they ever hold.
+    clip_negatives: bool
+    # Units of the 'value' variable, and of every other variable expressed in the same units
+    # ('value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB').
+    value_units: str
+    # CF standard name of the 'value' variable. An empty string means that no standard name
+    # applies and that the attribute is left out of the netCDF file altogether.
     value_standard_name: str
-    # WMO GAW (or other) calibration scale.
+    value_long_name: str
+    value_comment: str
+    # WMO GAW (or other) calibration scale. An empty string means that the tracer has none, in
+    # which case the scale is left out of the metadata rather than reported as empty.
     calibration_scale: str
     # Warning about a change of calibration scale, reported as the 'warning_dataset_scale'
     # netCDF attribute. Empty for every tracer whose scale has not changed.
@@ -78,6 +103,7 @@ def _greenhouse_gas(
     return Tracer(
         key=key,
         value_column=key,
+        std_column='Stdev',
         specs={
             'historic': f'{CPMETA}atc{capitalized_key}Product',
             'L2': f'{CPMETA}atc{capitalized_key}L2DataObject',
@@ -85,7 +111,11 @@ def _greenhouse_gas(
             'nrt': f'{CPMETA}atc{capitalized_key}NrtGrowingDataObject'},
         first_dataset_id=first_dataset_id,
         conversion_factor=conversion_factor,
+        clip_negatives=True,
+        value_units='mol mol-1',
         value_standard_name=f'mole_fraction_of_{spelled_out_name}_in_dry_air',
+        value_long_name='measured_mole_fraction_of_trace_gas_in_dry_air',
+        value_comment='mole per mole of dry air',
         calibration_scale=calibration_scale,
         scale_warning=scale_warning,
         gas_species=key.upper(),

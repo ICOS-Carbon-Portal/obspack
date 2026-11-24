@@ -17,7 +17,7 @@ from icoscp_core.sparql import BoundUri, SparqlResults
 # Local application/library specific imports.
 from icoscp_obspack.citation import AuthorWithWeight
 from icoscp_obspack.config import Config
-from icoscp_obspack.tracers import TRACERS
+from icoscp_obspack.tracers import DATA_TYPE_DESCRIPTIONS, TRACERS
 from icoscp_obspack.utils import extract_temporal_components, get_hash_sum, timeit, year_fraction
 
 # Averaging interval of the input data, advertised to users through the netCDF attribute
@@ -170,10 +170,13 @@ class DataWriter:
 
         tracer = self.config.tracer
         self.netcdf_dataset.createVariable('value', 'f4', ('time',), fill_value=np.nan, zlib=True)
-        self.netcdf_dataset['value'].long_name = 'measured_mole_fraction_of_trace_gas_in_dry_air'
-        self.netcdf_dataset['value'].standard_name = tracer.value_standard_name
-        self.netcdf_dataset['value'].units = 'mol mol-1'
-        self.netcdf_dataset['value'].comment = 'mole per mole of dry air'
+        self.netcdf_dataset['value'].long_name = tracer.value_long_name
+        # Tracers with no applicable CF standard name leave the attribute out altogether rather
+        # than report an empty one.
+        if tracer.value_standard_name:
+            self.netcdf_dataset['value'].standard_name = tracer.value_standard_name
+        self.netcdf_dataset['value'].units = tracer.value_units
+        self.netcdf_dataset['value'].comment = tracer.value_comment
         self.netcdf_dataset['value'].scale_comment = tracer.calibration_scale
 
         self.netcdf_dataset.createVariable('nvalue', 'i4', ('time',), fill_value=-9, zlib=True)
@@ -184,7 +187,7 @@ class DataWriter:
 
         self.netcdf_dataset.createVariable('value_std_dev', 'f4', ('time',), fill_value=np.nan, zlib=True)
         self.netcdf_dataset['value_std_dev'].long_name = 'standard_deviation_in_reported_value'
-        self.netcdf_dataset['value_std_dev'].units = 'mol mol-1'
+        self.netcdf_dataset['value_std_dev'].units = tracer.value_units
         self.netcdf_dataset['value_std_dev'].comment = (
             'This is the standard deviation of the reported mean value when nvalue is greater than 1.'
             ' See provider_comment if available.')
@@ -243,21 +246,21 @@ class DataWriter:
 
         self.netcdf_dataset.createVariable('icos_LTR', 'f4', ('time',), fill_value=np.nan, zlib=True)
         self.netcdf_dataset['icos_LTR'].long_name = 'icos_long_term_repeatability'
-        self.netcdf_dataset['icos_LTR'].units = 'mol mol-1'
+        self.netcdf_dataset['icos_LTR'].units = tracer.value_units
         self.netcdf_dataset['icos_LTR'].comment = (
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
 
         self.netcdf_dataset.createVariable('icos_SMR', 'f4', ('time',), fill_value=np.nan, zlib=True)
         self.netcdf_dataset['icos_SMR'].long_name = 'icos_continuous_measurement_repeatability'
-        self.netcdf_dataset['icos_SMR'].units = 'mol mol-1'
+        self.netcdf_dataset['icos_SMR'].units = tracer.value_units
         self.netcdf_dataset['icos_SMR'].comment = (
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
 
         self.netcdf_dataset.createVariable('icos_STTB', 'f4', ('time',), fill_value=np.nan, zlib=True)
         self.netcdf_dataset['icos_STTB'].long_name = 'icos_short_term_target_bias'
-        self.netcdf_dataset['icos_STTB'].units = 'mol mol-1'
+        self.netcdf_dataset['icos_STTB'].units = tracer.value_units
         self.netcdf_dataset['icos_STTB'].comment = (
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
@@ -470,7 +473,9 @@ class DataWriter:
         variables['icos_LTR'] = self.data['LTR'].array if 'LTR' in self.data.columns else np.zeros(self.data.shape[0])*np.nan
         variables['icos_SMR'] = self.data['CMR'].array if 'CMR' in self.data.columns else np.zeros(self.data.shape[0])*np.nan
         variables['icos_STTB'] = self.data['STTB'].array if 'STTB' in self.data.columns else np.zeros(self.data.shape[0])*np.nan
-        variables['quality_id'] = self.data['QualityId'].array
+        variables['quality_id'] = (
+            self.data['QualityId'].array if 'QualityId' in self.data.columns
+            else np.full(self.data.shape[0], -9))
         variables['instrument'] = self.data['InstrumentId'].array if 'InstrumentId' in self.data.columns else -1
         variables['obs_flag'] = 1
         variables['obs_num'] = np.arange(1, self.data.shape[0] + 1, 1)
@@ -488,7 +493,9 @@ class DataWriter:
                     np.array(values, f"S{var_shape[1]}").view("S1").reshape(var_shape)
             elif variable in ['value', 'value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB']:
                 new_values = values*self.config.tracer.conversion_factor
-                if variable != 'icos_STTB':
+                # Negative values are impossible for a mole fraction, but valid for tracers such
+                # as Delta-14C. `icos_STTB` is a bias and is always allowed to be negative.
+                if variable != 'icos_STTB' and self.config.tracer.clip_negatives:
                     new_values[new_values < 0] = np.nan
                 self.netcdf_dataset[variable][:] = new_values
             else:
@@ -580,6 +587,15 @@ class DataWriter:
     def _generate_metadata(self) -> dict[str, Any]:
         """Generate and upload metadata."""
         tracer = self.config.tracer
+        # Only the data types the tracer actually provides are listed.
+        data_types = _enumerate(
+            [DATA_TYPE_DESCRIPTIONS[data_type] for data_type in DATA_TYPE_DESCRIPTIONS
+             if data_type in tracer.specs])
+        # Tracers with no calibration scale leave the sentence about it out entirely rather
+        # than report an empty scale.
+        calibration = (
+            f' The measurements were calibrated using the WMO GAW calibration scale'
+            f' {tracer.calibration_scale}.' if tracer.calibration_scale else '')
 
         hashsum_of_previous_version = get_prev_by_name(filename=self.path_to_netcdf_file.name)
 
@@ -597,10 +613,8 @@ class DataWriter:
                     "comment": (
                         f"This data file contains high accuracy European ObsPack observational timeseries"
                         f" in netCDF format of {tracer.metadata_quantity}"
-                        f" collected at {self.station.org.name} ({self.height} m). The measurements were"
-                        f" calibrated using the WMO GAW calibration scale {tracer.calibration_scale}."
-                        f" Included are (all whenever available) historical PI QCed data, ICOS Level 2 data,"
-                        f" ICOS FastTrack data and ICOS NRT data."
+                        f" collected at {self.station.org.name} ({self.height} m).{calibration}"
+                        f" Included are (all whenever available) {data_types}."
                         f" It is part of {self.config.obspack_product_description} and is intended for use"
                         f" in carbon cycle inverse modeling, model evaluation, and satellite validation"
                         f" studies. Metadata for the full {tracer.gas_species} product release are available"
@@ -616,7 +630,9 @@ class DataWriter:
             "objectSpecification": tracer.obspack_obj_spec,
             "references": {
                 "autodeprecateSameFilenameObjects": True,
-                "keywords": [tracer.calibration_scale, tracer.metadata_keyword]
+                "keywords": (
+                    ([tracer.calibration_scale] if tracer.calibration_scale else [])
+                    + [tracer.metadata_keyword])
             }
         }
 
@@ -625,6 +641,16 @@ class DataWriter:
             metadata_for_upload["isNextVersionOf"] = [hashsum_of_previous_version]
 
         return metadata_for_upload
+
+
+def _enumerate(items: list[str]) -> str:
+    """Join items into an enumeration reading 'a, b and c'."""
+    if not items:
+        return ''
+    *all_but_last, last = items
+    if not all_but_last:
+        return last
+    return f"{', '.join(all_but_last)} and {last}"
 
 
 def get_prev_by_name(filename: str) -> str | None:

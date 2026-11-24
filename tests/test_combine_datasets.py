@@ -5,7 +5,7 @@ attributes it reads off a data object (`hash` and `specification`). Keeping it t
 makes these tests possible — see the "Data-level merge logic" section of CLAUDE.md.
 """
 # Standard library imports.
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -20,7 +20,7 @@ from icoscp_obspack.metadata_and_data_processing import (
     combine_datasets,
     load_datasets,
 )
-from icoscp_obspack.tracers import DATA_LEVEL_PER_TYPE, TRACERS
+from icoscp_obspack.tracers import DATA_LEVEL_PER_TYPE, TRACERS, Tracer
 
 TRACER = TRACERS['co2']
 GAS = TRACER.key
@@ -37,10 +37,11 @@ class StubDobj:
     """The only attributes the code under test reads off a `DataObject`."""
     hash: str
     data_type: str
+    tracer: Tracer = TRACER
 
     @property
     def specification(self):
-        return SimpleNamespace(self=SimpleNamespace(uri=TRACER.specs[self.data_type]))
+        return SimpleNamespace(self=SimpleNamespace(uri=self.tracer.specs[self.data_type]))
 
 
 def normalised_frame(first: datetime, n_hours: int, data_type: str) -> pd.DataFrame:
@@ -231,7 +232,9 @@ def test_an_older_duplicate_does_not_displace_the_dataset_in_place():
 # load_datasets
 # --------------------------------------------------------------------------------------------
 
-def raw_frame(first: datetime, n_hours: int, flags: str) -> pd.DataFrame:
+def raw_frame(
+        first: datetime, n_hours: int, flags: str, value_column: str = GAS,
+        std_column: str = 'Stdev') -> pd.DataFrame:
     """A data file as `get_dataset` returns it, before normalisation."""
     stamps = [first + timedelta(hours=i) for i in range(n_hours)]
     return pd.DataFrame({
@@ -239,7 +242,8 @@ def raw_frame(first: datetime, n_hours: int, flags: str) -> pd.DataFrame:
         'Day': [t.day for t in stamps], 'Hour': [t.hour for t in stamps],
         'Minute': [0] * n_hours,
         'DecimalDate': [t.year + i / 8760 for i, t in enumerate(stamps)],
-        GAS: [400.0 + i for i in range(n_hours)],
+        value_column: [400.0 + i for i in range(n_hours)],
+        std_column: [0.1] * n_hours,
         'Flag': [flags[i % len(flags)] for i in range(n_hours)],
     })
 
@@ -296,3 +300,27 @@ def test_load_datasets_ignores_objects_of_another_specification(stub_get_dataset
         specification=SimpleNamespace(self=SimpleNamespace(uri='http://example.org/not-a-gas-spec')))
 
     assert load_datasets([other], TRACER, True, 'unused', True) == []
+
+
+def test_load_datasets_renames_the_standard_deviation_column(stub_get_dataset):
+    stub_get_dataset['l2'] = raw_frame(utc(2020), 3, 'O')
+    dobj = StubDobj('l2', 'L2')
+
+    result = load_datasets([dobj], TRACER, False, 'unused', True)
+
+    assert 'Stdev' in result[0].data.columns
+
+
+def test_load_datasets_uses_the_alternate_columns_of_a_tracer(stub_get_dataset):
+    """A tracer may name its value and standard deviation columns differently."""
+    tracer = replace(TRACER, value_column='14C', std_column='WeightedStdErr')
+    stub_get_dataset['l2'] = raw_frame(
+        utc(2020), 3, 'O', value_column=tracer.value_column, std_column=tracer.std_column)
+    dobj = StubDobj('l2', 'L2', tracer=tracer)
+
+    result = load_datasets([dobj], tracer, False, 'unused', True)
+
+    data = result[0].data
+    assert {'Meas', 'Stdev'} <= set(data.columns)
+    assert tracer.value_column not in data.columns
+    assert tracer.std_column not in data.columns

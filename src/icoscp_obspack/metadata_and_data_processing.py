@@ -427,10 +427,12 @@ def dobjs_from_station_by_sampling_height(
                 f'Skipping data object {dobj_lite.uri} at station {station.uri} because sampling '
                 ' height is missing.')
             continue
-        # FastTrack objects all have the same specification, no matter which gas species' data
-        # they contain. The filename allows to determine which gas species the file is about.
+        # Several tracers share one FastTrack specification, which therefore does not say which
+        # tracer a given object is about; its file name does. Tracers with a FastTrack
+        # specification of their own, or none at all, need no such disambiguation.
         elif (
-            dobj_lite.datatype_uri == FASTTRACK_SPEC
+            tracer.specs.get('fasttrack') == FASTTRACK_SPEC
+            and dobj_lite.datatype_uri == FASTTRACK_SPEC
             and dobj_lite.filename.split('.')[-2].split('_')[-1].lower() != tracer.key):
             continue
         else:
@@ -530,8 +532,8 @@ def load_datasets(
     :param `dobjs`:
         A list of `DataObject` that are related to a station and sampling height.
     :param `tracer`:
-        The tracer being processed. Its `value_column` names the column holding the measurement
-        in the data files.
+        The tracer being processed. Its `value_column` and `std_column` name the columns holding
+        the measurement and its standard deviation in the data files.
     :param `use_flags`:
         Whether to keep only the data points whose quality flag is considered good.
     :param `zip_dir`, `use_cached_datafiles`:
@@ -549,7 +551,8 @@ def load_datasets(
             if dobj.specification.self.uri == spec:
                 dataset: pd.DataFrame = get_dataset(dobj, zip_dir, use_cached_datafiles)
                 dataset = dataset.rename(
-                    {'DecimalDate': 'JulDate', tracer.value_column: 'Meas'}, axis=1)
+                    {'DecimalDate': 'JulDate', tracer.value_column: 'Meas',
+                     tracer.std_column: 'Stdev'}, axis=1)
                 dataset['Datetime'] = dataset.apply(get_datetime, axis=1)
                 dataset['Level'] = DATA_LEVEL_PER_TYPE[data_type]
                 if use_flags:
@@ -624,7 +627,6 @@ def combine_datasets(
         if loaded_dataset.dobj.hash in hashsums_of_all_used_dobjs]
 
     full_dataset = merge_by_priority(data_per_type, station_id, sampling_height)
-
     return full_dataset.set_index('Datetime'), used_dobjs
 
 def merge_by_priority(
