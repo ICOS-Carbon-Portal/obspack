@@ -19,8 +19,16 @@ from icoscp_obspack.metadata_and_data_processing import (
     LoadedDataset,
     combine_datasets,
     load_datasets,
+    looks_like_a_sentinel,
+    mask_sentinels,
 )
-from icoscp_obspack.tracers import DATA_LEVEL_PER_TYPE, TRACERS, Tracer
+from icoscp_obspack.tracers import (
+    DATA_LEVEL_PER_TYPE,
+    SENTINEL_VALUE_FLAG,
+    TRACERS,
+    Sentinel,
+    Tracer,
+)
 
 TRACER = TRACERS['co2']
 GAS = TRACER.key
@@ -38,6 +46,10 @@ class StubDobj:
     hash: str
     data_type: str
     tracer: Tracer = TRACER
+
+    @property
+    def fileName(self) -> str:  # noqa: N802 - mirrors `DataObject`
+        return f'{self.hash}.zip'
 
     @property
     def specification(self):
@@ -324,3 +336,145 @@ def test_load_datasets_uses_the_alternate_columns_of_a_tracer(stub_get_dataset):
     assert {'Meas', 'Stdev'} <= set(data.columns)
     assert tracer.value_column not in data.columns
     assert tracer.std_column not in data.columns
+
+
+# --------------------------------------------------------------------------------------------
+# mask_sentinels
+# --------------------------------------------------------------------------------------------
+
+def source_rows(**columns: list) -> pd.DataFrame:
+    """A few source rows of CO2, good unless a 'Flag' column says otherwise."""
+    n = len(next(iter(columns.values())))
+    defaults = {GAS: [400.0] * n, 'Stdev': [0.1] * n, 'NbPoints': [10] * n, 'Flag': ['O'] * n}
+    return pd.DataFrame({**defaults, **columns})
+
+
+def mask(dataset: pd.DataFrame, tracer=TRACER, good_flags=('O', 'U')) -> pd.DataFrame:
+    return mask_sentinels(dataset, tracer, list(good_flags), 'source.zip')
+
+
+@pytest.mark.parametrize(
+    'value', [-9.0, -9.99, -9.9, -99.99, -999.9, -999.99, -9999.0, -999990.0])
+def test_sentinel_shapes_are_recognised(value):
+    assert looks_like_a_sentinel(pd.Series([value])).iloc[0]
+
+
+@pytest.mark.parametrize('value', [9.99, 999.99, -9.98, -1.5, -90.0, -0.99, 0.0])
+def test_other_values_do_not_look_like_a_sentinel(value):
+    assert not looks_like_a_sentinel(pd.Series([value])).iloc[0]
+
+
+def test_the_expected_sentinel_becomes_missing_and_its_good_flag_bad(capsys):
+    result = mask(source_rows(**{GAS: [400.0, -999.99, -999.99], 'Flag': ['O', 'O', 'N']}))
+
+    assert result[GAS].iloc[0] == 400.0
+    assert result[GAS].iloc[1:].isna().all()
+    assert result['Flag'].tolist() == ['O', SENTINEL_VALUE_FLAG, 'N']
+    assert '1 row(s) hold a sentinel value under a good flag' in capsys.readouterr().out
+
+
+def test_rows_are_kept():
+    dataset = source_rows(**{GAS: [-999.99, -999.99]})
+
+    assert len(mask(dataset)) == 2
+
+
+def test_a_sentinel_only_masks_its_own_column():
+    """A missing standard deviation does not make the measurement missing, nor bad."""
+    result = mask(source_rows(Stdev=[-9.99, 0.1]))
+
+    assert result['Stdev'].isna().tolist() == [True, False]
+    assert result[GAS].tolist() == [400.0, 400.0]
+    assert result['Flag'].tolist() == ['O', 'O']
+
+
+def test_the_flag_is_only_corrected_for_the_measured_value():
+    result = mask(source_rows(LTR=[-999.99], CMR=[-999.99], STTB=[-999.99]))
+
+    assert result[['LTR', 'CMR', 'STTB']].isna().all(axis=None)
+    assert result['Flag'].tolist() == ['O']
+
+
+def test_an_unexpected_sentinel_is_reported_and_masked(capsys):
+    result = mask(source_rows(Stdev=[-999.9, -999.9, 0.1], **{GAS: [-999990.0, 400.0, 400.0]}))
+
+    assert result['Stdev'].isna().tolist() == [True, True, False]
+    assert result[GAS].isna().tolist() == [True, False, False]
+    assert result['Flag'].iloc[0] == SENTINEL_VALUE_FLAG
+    out = capsys.readouterr().out
+    assert 'column Stdev holds -999.9 on 2 row(s)' in out
+    assert 'expected -9.99; masked' in out
+    assert f'column {GAS} holds -999990 on 1 row(s)' in out
+
+
+def test_an_unexpected_sentinel_is_only_reported_where_negatives_are_valid(capsys):
+    """A Delta-14C of -9.9 per mil is plausible, so it is kept, but still reported."""
+    tracer = replace(
+        TRACER, value_column='14C', clip_negatives=False,
+        sentinels={'14C': Sentinel(-999.99, negatives_are_valid=True)})
+    dataset = pd.DataFrame({'14C': [-9.9, -999.99, -25.3], 'Flag': ['O', 'O', 'O']})
+
+    result = mask(dataset, tracer)
+
+    assert result['14C'].iloc[0] == -9.9
+    assert pd.isna(result['14C'].iloc[1])
+    assert result['14C'].iloc[2] == -25.3
+    assert result['Flag'].tolist() == ['O', SENTINEL_VALUE_FLAG, 'O']
+    out = capsys.readouterr().out
+    assert 'column 14C holds -9.9 on 1 row(s)' in out
+    assert 'left as is' in out
+    assert '-25.3' not in out
+
+
+def test_sttb_keeps_its_negative_values():
+    result = mask(source_rows(STTB=[-9.99, -0.2, -999.99]))
+
+    assert result['STTB'].iloc[:2].tolist() == [-9.99, -0.2]
+    assert pd.isna(result['STTB'].iloc[2])
+
+
+def test_an_integer_sentinel_becomes_the_integer_fill_value():
+    result = mask(source_rows(NbPoints=[-9, 10]))
+
+    assert pd.api.types.is_integer_dtype(result['NbPoints'])
+    assert result['NbPoints'].tolist() == [mdp.INT_FILL_VALUE, 10]
+
+
+def test_columns_a_dataset_lacks_are_skipped():
+    """Some historic files have no LTR, CMR or STTB."""
+    result = mask(source_rows(**{GAS: [-999.99]}))
+
+    assert 'LTR' not in result.columns
+
+
+def test_the_source_dataset_is_left_untouched():
+    dataset = source_rows(**{GAS: [-999.99]})
+
+    mask(dataset)
+
+    assert dataset[GAS].iloc[0] == -999.99
+    assert dataset['Flag'].iloc[0] == 'O'
+
+
+def test_every_tracer_declares_the_sentinels_of_its_value_and_standard_deviation():
+    for tracer in TRACERS.values():
+        assert {tracer.value_column, tracer.std_column} <= set(tracer.sentinels), tracer.key
+        # A value column holding genuine negatives must not lose them to the sentinel shape.
+        assert tracer.sentinels[tracer.value_column].negatives_are_valid == (
+            not tracer.clip_negatives), tracer.key
+
+
+def test_load_datasets_masks_sentinels_before_filtering_flags(stub_get_dataset):
+    """The corrected flag is what lets `use_flags` drop the row."""
+    frame = raw_frame(utc(2020), 3, 'O')
+    frame.loc[1, GAS] = -999.99
+    stub_get_dataset['l2'] = frame
+
+    filtered = load_datasets([StubDobj('l2', 'L2')], TRACER, True, 'unused', True)
+    kept = load_datasets([StubDobj('l2', 'L2')], TRACER, False, 'unused', True)
+
+    assert len(filtered[0].data) == 2
+    assert not filtered[0].data['Meas'].isna().any()
+    assert len(kept[0].data) == 3
+    assert kept[0].data['Flag'].tolist() == ['O', SENTINEL_VALUE_FLAG, 'O']
+    assert pd.isna(kept[0].data['Meas'].iloc[1])

@@ -32,12 +32,39 @@ GOOD_FLAGS_PER_TYPE: dict[str, list[str]] = {
     'fasttrack': ['O', 'U'],
     'nrt': ['U']}
 
+# Flag given to a row whose measured value is a sentinel but whose flag is good, an inconsistency
+# found in some source files. 'K' is 'bad after manual quality check', as opposed to 'N', 'bad
+# before manual quality check'.
+SENTINEL_VALUE_FLAG = 'K'
+
 # How each data type is referred to in the metadata of individual datasets.
 DATA_TYPE_DESCRIPTIONS: dict[str, str] = {
     'historic': 'historical PI QCed data',
     'L2': 'ICOS Level 2 data',
     'fasttrack': 'ICOS FastTrack data',
     'nrt': 'ICOS NRT data'}
+
+
+@dataclass(frozen=True)
+class Sentinel:
+    """The value a source column holds in place of a missing measurement."""
+
+    value: float
+    # Whether the column also holds genuine negative values. Where it does, a negative value
+    # that merely looks like a sentinel (-9.9 for a Delta-14C, for instance) may well be a real
+    # measurement, so only `value` itself is treated as missing there.
+    negatives_are_valid: bool = False
+
+
+# Columns written to the product that carry a sentinel in every tracer that has them. Keys are
+# the source column names.
+COMMON_SENTINELS: dict[str, Sentinel] = {
+    'LTR': Sentinel(-999.99),
+    'CMR': Sentinel(-999.99),
+    # A bias, legitimately negative.
+    'STTB': Sentinel(-999.99, negatives_are_valid=True),
+    'NbPoints': Sentinel(-9),
+}
 
 
 @dataclass(frozen=True)
@@ -59,8 +86,8 @@ class Tracer:
     conversion_factor: float
     # Whether negative values are physically impossible and should be set to NaN. True for mole
     # fractions, False for radon activity concentrations, which are near zero and noisy, and for
-    # Delta-14C, which is routinely negative. Note that for the mole fractions this is also what
-    # disposes of the missing value sentinel, the only negative value they ever hold.
+    # Delta-14C, which is routinely negative. Sentinels are removed beforehand, independently of
+    # this; see `sentinels`.
     clip_negatives: bool
     # Units of the 'value' variable, and of every other variable expressed in the same units
     # ('value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB').
@@ -88,6 +115,10 @@ class Tracer:
     plot_gas_label: str
     plot_unit_label: str
     plot_limy: tuple[float, float]
+    # Source column name -> the sentinel it holds in place of a missing value, for every column
+    # written to the product. One sentinel per column, as observed across every ATC data object
+    # of the L2-2026.1 release; anything else that looks like one is reported when read.
+    sentinels: dict[str, Sentinel]
 
 
 def _greenhouse_gas(
@@ -124,7 +155,8 @@ def _greenhouse_gas(
         obspack_obj_spec=obspack_obj_spec,
         plot_gas_label=plot_gas_label,
         plot_unit_label=plot_unit_label,
-        plot_limy=plot_limy)
+        plot_limy=plot_limy,
+        sentinels={key: Sentinel(-999.99), 'Stdev': Sentinel(-9.99), **COMMON_SENTINELS})
 
 
 CO2_SCALE_WARNING = (

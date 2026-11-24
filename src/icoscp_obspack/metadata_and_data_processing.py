@@ -1,5 +1,6 @@
 # Standard library imports.
 import pickle
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from io import BytesIO
@@ -7,6 +8,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 # Related third party imports.
+import numpy as np
 import pandas as pd
 from icoscp_core.icos import ATMO_STATION, data, meta
 from icoscp_core.metaclient import Station
@@ -18,7 +20,12 @@ from pandas._typing import DtypeArg
 # Local application/library specific imports.
 from icoscp_obspack.citation import Author, AuthorWithWeight, citation, doi_citation
 from icoscp_obspack.config import Config, create_obspack_release_name
-from icoscp_obspack.data_writer import DataWriter, NetcdfFileInfoForUploader, StationExtraInfo
+from icoscp_obspack.data_writer import (
+    INT_FILL_VALUE,
+    DataWriter,
+    NetcdfFileInfoForUploader,
+    StationExtraInfo,
+)
 from icoscp_obspack.doi import GeoLocation, GeoLocationPoint, produce_doi_meta
 from icoscp_obspack.geo_json import (
     GeoFeature,
@@ -33,6 +40,7 @@ from icoscp_obspack.tracers import (
     DATA_LEVEL_PER_TYPE,
     FASTTRACK_SPEC,
     GOOD_FLAGS_PER_TYPE,
+    SENTINEL_VALUE_FLAG,
     Tracer,
 )
 from icoscp_obspack.utils import timeit
@@ -550,6 +558,9 @@ def load_datasets(
         for data_type, spec in tracer.specs.items():
             if dobj.specification.self.uri == spec:
                 dataset: pd.DataFrame = get_dataset(dobj, zip_dir, use_cached_datafiles)
+                # Before the flag filtering, which relies on the flags this corrects.
+                dataset = mask_sentinels(
+                    dataset, tracer, GOOD_FLAGS_PER_TYPE[data_type], dobj.fileName)
                 dataset = dataset.rename(
                     {'DecimalDate': 'JulDate', tracer.value_column: 'Meas',
                      tracer.std_column: 'Stdev'}, axis=1)
@@ -703,6 +714,80 @@ def merge_by_priority(
     if not datasets_to_concatenate:
         return pd.DataFrame()
     return pd.concat(datasets_to_concatenate)
+
+# Negative numbers made of nines, possibly followed by zeros: -9, -9.99, -999.9, -999.99, and
+# -999990 as found in a few historic files. Deliberately broad: anything matching it that is not
+# the expected sentinel is reported.
+SENTINEL_SHAPE = re.compile(r'-9+(\.9+)?|-9{3,}0+')
+
+
+def looks_like_a_sentinel(values: pd.Series) -> pd.Series:
+    """Whether each value has the shape of a sentinel; see `SENTINEL_SHAPE`."""
+    shaped = pd.Series(False, index=values.index)
+    negative = values < 0
+    if negative.any():
+        shaped[negative] = [bool(SENTINEL_SHAPE.fullmatch(f'{v:.10g}')) for v in values[negative]]
+    return shaped
+
+
+def mask_sentinels(
+        dataset: pd.DataFrame, tracer: Tracer, good_flags: list[str], source: str) -> pd.DataFrame:
+    """
+    Turn the sentinels of a source dataset into genuine missing data.
+
+    Works on the source column names, column by column, so that a sentinel in one column leaves
+    the others alone: a missing standard deviation does not make the measurement missing.
+
+    - A value equal to the column's expected sentinel (`tracer.sentinels`) is missing.
+    - Any other value shaped like a sentinel is reported. It is treated as missing too, unless
+      the column also holds genuine negative values, in which case it may be a real measurement
+      and is left as it is.
+    - Where the measured value is missing but the flag is a good one, the flag is replaced by
+      `SENTINEL_VALUE_FLAG`, so that the row is dropped by flag filtering like any other bad one.
+      This has to happen before that filtering.
+
+    Missing float values become NaN, which `data_writer` writes as `FLOAT_FILL_VALUE`. Integer
+    columns cannot hold NaN, so theirs become `INT_FILL_VALUE`. Rows are never removed.
+    :param `dataset`:
+        A dataset as read from a data object, before its columns are renamed.
+    :param `tracer`:
+        The tracer being processed.
+    :param `good_flags`:
+        The flags considered good for the data type of the dataset.
+    :param `source`:
+        Names the data object in the messages.
+    :return:
+        The dataset with its sentinels masked.
+    """
+    dataset = dataset.copy()
+    for column, sentinel in tracer.sentinels.items():
+        if column not in dataset.columns:
+            continue
+        values = dataset[column]
+        expected = values == sentinel.value
+        unexpected = looks_like_a_sentinel(values) & ~expected
+        if unexpected.any():
+            counts = ', '.join(
+                f'{value:g} on {count} row(s)' for value, count in values[unexpected].value_counts().items())
+            action = 'left as is' if sentinel.negatives_are_valid else 'masked'
+            print(
+                f'Warning: {source}: column {column} holds {counts}, which look like a sentinel but'
+                f' differ from the expected {sentinel.value:g}; {action}.')
+        missing = expected if sentinel.negatives_are_valid else expected | unexpected
+        if not missing.any():
+            continue
+        if column == tracer.value_column and 'Flag' in dataset.columns:
+            wrongly_good = missing & dataset['Flag'].isin(good_flags)
+            if wrongly_good.any():
+                print(
+                    f'Warning: {source}: {wrongly_good.sum()} row(s) hold a sentinel value under a'
+                    f' good flag; flagged {SENTINEL_VALUE_FLAG} instead.')
+                dataset.loc[wrongly_good, 'Flag'] = SENTINEL_VALUE_FLAG
+        if pd.api.types.is_integer_dtype(values):
+            dataset.loc[missing, column] = INT_FILL_VALUE
+        else:
+            dataset.loc[missing, column] = np.nan
+    return dataset
 
 def get_dataset(dobj: DataObject, zip_dir: Path, use_cached_datafiles: bool) -> pd.DataFrame:
     path_to_file = Path(zip_dir, dobj.fileName)

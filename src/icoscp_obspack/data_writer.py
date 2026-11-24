@@ -29,6 +29,18 @@ HALF_INTERVAL_IN_SEC = round(DATA_FREQUENCY_IN_HOURS * 3600 / 2)
 # Reference point of the 'seconds since 1970-01-01T00:00:00Z' units of the time variables.
 EPOCH = pd.Timestamp('1970-01-01', tz='UTC')
 
+# Fill values of the netCDF variables, that is what a missing value is written as. Sentinels
+# found in the source files are turned into NaN when the data is read (see `mask_sentinels`) and
+# stay NaN throughout, NaN being what the scaling, the clipping and the plotting expect; NaN is
+# only replaced by `FLOAT_FILL_VALUE` when the netCDF file is written, which makes no difference
+# for as long as `FLOAT_FILL_VALUE` is NaN itself. Integer columns cannot hold NaN, so their
+# sentinels are replaced by `INT_FILL_VALUE` directly.
+FLOAT_FILL_VALUE = np.nan
+INT_FILL_VALUE = -9
+# How a missing float value is written to the .txt files. Only needed because NaN has no textual
+# representation of its own; a numeric `FLOAT_FILL_VALUE` would be written as itself instead.
+TXT_FLOAT_FILL_VALUE = '-999999'
+
 # Hard-coded country codes for stations that are missing one in the ICOS metadata
 COUNTRY_CODE = {'INE': 'CY', 'VTI': 'IE'}
 
@@ -169,7 +181,7 @@ class DataWriter:
             ' rounded down to the nearest second.')
 
         tracer = self.config.tracer
-        self.netcdf_dataset.createVariable('value', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset.createVariable('value', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['value'].long_name = tracer.value_long_name
         # Tracers with no applicable CF standard name leave the attribute out altogether rather
         # than report an empty one.
@@ -179,36 +191,36 @@ class DataWriter:
         self.netcdf_dataset['value'].comment = tracer.value_comment
         self.netcdf_dataset['value'].scale_comment = tracer.calibration_scale
 
-        self.netcdf_dataset.createVariable('nvalue', 'i4', ('time',), fill_value=-9, zlib=True)
+        self.netcdf_dataset.createVariable('nvalue', 'i4', ('time',), fill_value=INT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['nvalue'].long_name = 'number_of_measurements_contributing_to_reported_value'
         self.netcdf_dataset['nvalue'].comment = (
             'Number of individual measurements used to compute reported value.'
             ' See provider_comment if available.')
 
-        self.netcdf_dataset.createVariable('value_std_dev', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset.createVariable('value_std_dev', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['value_std_dev'].long_name = 'standard_deviation_in_reported_value'
         self.netcdf_dataset['value_std_dev'].units = tracer.value_units
         self.netcdf_dataset['value_std_dev'].comment = (
             'This is the standard deviation of the reported mean value when nvalue is greater than 1.'
             ' See provider_comment if available.')
 
-        self.netcdf_dataset.createVariable('latitude', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset.createVariable('latitude', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['latitude'].long_name = 'sample_latitude_in_decimal_degrees'
         self.netcdf_dataset['latitude'].units = 'decimal degrees north (-90..90)'
         self.netcdf_dataset['latitude'].comment = 'Latitude at which air sample was collected.'
 
-        self.netcdf_dataset.createVariable('longitude', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset.createVariable('longitude', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['longitude'].long_name = 'sample_longitude_in_decimal_degrees'
         self.netcdf_dataset['longitude'].units = 'decimal degrees east (-180..180)'
         self.netcdf_dataset['longitude'].comment = 'Longitude at which air sample was collected.'
 
-        self.netcdf_dataset.createVariable('altitude', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset.createVariable('altitude', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['altitude'].long_name = 'sample_altitude_in_meters_above_sea_level'
         self.netcdf_dataset['altitude'].units = 'meters above sea level (masl)'
         self.netcdf_dataset['altitude'].comment = \
             'Altitude (surface elevation plus sample intake height) at which air sample was collected'
 
-        self.netcdf_dataset.createVariable('intake_height', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset.createVariable('intake_height', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['intake_height'].long_name = \
             'Height above ground at which air sample was collected'
         self.netcdf_dataset['intake_height'].units = 'meters above ground level (magl)'
@@ -244,21 +256,21 @@ class DataWriter:
             ' and PI); Level 2 means final quality data (Manual and automatic QC by PI and ATC - Data'
             ' processing at ICOS ATC is described in [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
 
-        self.netcdf_dataset.createVariable('icos_LTR', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset.createVariable('icos_LTR', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['icos_LTR'].long_name = 'icos_long_term_repeatability'
         self.netcdf_dataset['icos_LTR'].units = tracer.value_units
         self.netcdf_dataset['icos_LTR'].comment = (
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
 
-        self.netcdf_dataset.createVariable('icos_SMR', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset.createVariable('icos_SMR', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['icos_SMR'].long_name = 'icos_continuous_measurement_repeatability'
         self.netcdf_dataset['icos_SMR'].units = tracer.value_units
         self.netcdf_dataset['icos_SMR'].comment = (
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
 
-        self.netcdf_dataset.createVariable('icos_STTB', 'f4', ('time',), fill_value=np.nan, zlib=True)
+        self.netcdf_dataset.createVariable('icos_STTB', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['icos_STTB'].long_name = 'icos_short_term_target_bias'
         self.netcdf_dataset['icos_STTB'].units = tracer.value_units
         self.netcdf_dataset['icos_STTB'].comment = (
@@ -495,8 +507,11 @@ class DataWriter:
                 new_values = values*self.config.tracer.conversion_factor
                 # Negative values are impossible for a mole fraction, but valid for tracers such
                 # as Delta-14C. `icos_STTB` is a bias and is always allowed to be negative.
+                # Sentinels are already gone by now; this only removes genuine negatives.
                 if variable != 'icos_STTB' and self.config.tracer.clip_negatives:
                     new_values[new_values < 0] = np.nan
+                # Missing values are NaN in memory, whatever the fill value of the file.
+                new_values = np.where(np.isnan(new_values), FLOAT_FILL_VALUE, new_values)
                 self.netcdf_dataset[variable][:] = new_values
             else:
                 self.netcdf_dataset[variable][:] = values
@@ -537,7 +552,7 @@ class DataWriter:
                 csv_file.write(f'{line}\n')
         time_after_writing_csv_header = timeit(time_after_creating_csv_header, f'        Write header for CSV {self.filename}', self.config.print_timing_messages)
         csv_data.to_csv(
-            csv_path, mode='a', sep=' ', na_rep='-999999', header=True, index=False, float_format='%.5f')
+            csv_path, mode='a', sep=' ', na_rep=TXT_FLOAT_FILL_VALUE, header=True, index=False, float_format='%.5f')
         _ = timeit(time_after_writing_csv_header, f'        Write CSV data for {self.filename}', self.config.print_timing_messages)
 
     def _create_txt_header(self, skipped_variables: set[str]) -> list[str]:
