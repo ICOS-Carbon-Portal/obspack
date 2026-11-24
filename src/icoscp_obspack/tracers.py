@@ -14,10 +14,10 @@ from dataclasses import dataclass
 
 CPMETA = 'http://meta.icos-cp.eu/resources/cpmeta/'
 
-# One FastTrack specification is shared by CO2, CH4, N2O and CO. Despite its name, each
+# One FastTrack specification is shared by CO2, CH4, N2O, CO and Rn. Despite its name, each
 # object still holds a single tracer; it is the specification that does not distinguish them, so
 # the tracer has to be read from the file name, whose last underscore-separated token before the
-# archive extension names it ('..._WAO_10.0_CTS_CO2.zip'). Tracers whose 'fasttrack' spec is this
+# archive extension names it ('..._WAO_10.0_CTS_RN.zip'). Tracers whose 'fasttrack' spec is this
 # one need that disambiguation, the others do not.
 FASTTRACK_SPEC = f'{CPMETA}atcGHGFastTrackNRTDataObject'
 
@@ -181,4 +181,77 @@ TRACERS: dict[str, Tracer] = {
     'co': _greenhouse_gas(
         'co', 'Co', 'carbon_monoxide', 1e-9, 'WMO X2014A', f'{CPMETA}ObspackCOTimeSeriesResult',
         'CO', '[nmol/mol]', (0, 600), 4000),
+    # Radon-222. An activity concentration, not a mole fraction, so no unit conversion applies
+    # and negative values are not clipped. There is no historic data, and the FastTrack data sits
+    # under the specification shared with the greenhouse gases rather than under one of its own.
+    'rn': Tracer(
+        key='rn',
+        value_column='rn',
+        std_column='Stdev',
+        specs={
+            'L2': f'{CPMETA}atcRnL2DataObject',
+            'fasttrack': FASTTRACK_SPEC,
+            'nrt': f'{CPMETA}atcRnNrtGrowingDataObject'},
+        first_dataset_id=5000,
+        conversion_factor=1.0,
+        clip_negatives=False,
+        value_units='Bq m-3',
+        value_standard_name='radioactivity_concentration_of_222Rn_in_air',
+        value_long_name='radon_222_activity_concentration',
+        value_comment='222Rn activity concentration in air (Bq per m3)',
+        calibration_scale='',
+        scale_warning='',
+        gas_species='Rn',
+        metadata_quantity='222Rn activity concentration in air',
+        metadata_keyword='atmospheric 222Rn activity concentration',
+        obspack_obj_spec=f'{CPMETA}ObspackRnTimeSeriesResult',
+        plot_gas_label=r'$^{222}$Rn',
+        plot_unit_label='[Bq/m³]',
+        plot_limy=(0, 20),
+        # Unlike the greenhouse gases, radon uses the value's sentinel for its standard
+        # deviation too.
+        sentinels={
+            'rn': Sentinel(-999.99, negatives_are_valid=True), 'Stdev': Sentinel(-999.99),
+            'NbPoints': COMMON_SENTINELS['NbPoints']}),
+    # Radiocarbon in CO2, reported as Delta-14C in per mil and measured from integrated or flask
+    # sampling by the ICOS Central Radiocarbon Laboratory. Negative values are valid.
+    # The source files name their columns differently and provide neither QualityId nor
+    # InstrumentId.
+    # The CF standard name is the one for *uppercase* Delta-14C, that is the isotopic enrichment
+    # corrected for fractionation using the 13C/12C ratio (Stuiver and Polach, 1977), which is
+    # what the CRL reports. Its canonical unit is '1e-3', the udunits spelling of per mil. CF
+    # asks for the reference standard to be named in the variable's long name; per the ICOS
+    # metadata that standard is NIST SRM 4990C, the oxalic acid II of Stuiver and Polach.
+    '14co2': Tracer(
+        key='14co2',
+        value_column='14C',
+        std_column='WeightedStdErr',
+        specs={
+            'L2': f'{CPMETA}atcC14L2DataObject',
+            'fasttrack': f'{CPMETA}atcC14FastTrackNrtDataObject',
+            'nrt': f'{CPMETA}atcC14NrtDataObject'},
+        first_dataset_id=6000,
+        conversion_factor=1.0,
+        clip_negatives=False,
+        value_units='1e-3',
+        value_standard_name=(
+            'enrichment_of_14C_in_carbon_dioxide_in_air_expressed_as_uppercase_delta_14C'),
+        value_long_name='delta_14C_in_atmospheric_CO2_relative_to_NIST_SRM_4990C_oxalic_acid_II',
+        value_comment=(
+            'Activity concentration of the sample with respect to the activity concentration of'
+            ' the international standard material NIST SRM 4990C (oxalic acid II), in per mil'
+            ' (1e-3)'),
+        calibration_scale='',
+        scale_warning='',
+        gas_species='14CO2',
+        metadata_quantity='Delta-14C of atmospheric CO2',
+        metadata_keyword='Delta-14C in atmospheric CO2',
+        obspack_obj_spec=f'{CPMETA}obspack14CO2TimeSeriesResult',
+        plot_gas_label=r'$\Delta^{14}$C',
+        plot_unit_label='[‰]',
+        plot_limy=(-100, 100),
+        sentinels={
+            '14C': Sentinel(-999.99, negatives_are_valid=True),
+            'WeightedStdErr': Sentinel(-9.99),
+            'NbPoints': COMMON_SENTINELS['NbPoints']}),
 }

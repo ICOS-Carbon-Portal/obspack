@@ -142,7 +142,7 @@ def test_nrt_is_trimmed_at_the_last_fasttrack_row():
 
 
 def test_nrt_is_trimmed_against_l2_when_there_is_no_fasttrack():
-    """Level-2 and near-real-time data only, overlapping in time."""
+    """Radon's shape: level-2 and near-real-time data only, overlapping in time."""
     l2 = loaded('l2', 'L2', utc(2022, 1, 1), 24 * 3)                      # Jan 1 -> Jan 3
     nrt = loaded('nrt', 'nrt', utc(2022, 1, 2), 24 * 3)                   # overlaps Jan 2-3
 
@@ -336,6 +336,38 @@ def test_load_datasets_uses_the_alternate_columns_of_a_tracer(stub_get_dataset):
     assert {'Meas', 'Stdev'} <= set(data.columns)
     assert tracer.value_column not in data.columns
     assert tracer.std_column not in data.columns
+
+
+def test_load_datasets_ignores_data_types_a_tracer_does_not_provide(stub_get_dataset):
+    """Radon has no historic data, so that specification never matches one of its objects."""
+    tracer = TRACERS['rn']
+    assert 'historic' not in tracer.specs
+
+    historic_only = SimpleNamespace(
+        hash='hist',
+        specification=SimpleNamespace(
+            self=SimpleNamespace(uri=TRACERS['co2'].specs['historic'])))
+
+    assert load_datasets([historic_only], tracer, True, 'unused', True) == []
+
+
+def test_load_datasets_accepts_the_fasttrack_specification_radon_shares_with_the_gases(
+        stub_get_dataset):
+    """
+    Radon's FastTrack objects carry the specification shared with the greenhouse gases, so at
+    this point they are indistinguishable from a CO2 FastTrack object. The separation happens
+    earlier, in `dobjs_from_station_by_sampling_height`, which reads the tracer from the file
+    name; `load_datasets` only ever matches on the specification URI.
+    """
+    tracer = TRACERS['rn']
+    assert tracer.specs['fasttrack'] == TRACERS['co2'].specs['fasttrack']
+    stub_get_dataset['ft'] = raw_frame(
+        utc(2026, 4), 3, 'O', value_column=tracer.value_column, std_column=tracer.std_column)
+
+    result = load_datasets(
+        [StubDobj('ft', 'fasttrack', tracer=tracer)], tracer, False, 'unused', True)
+
+    assert [loaded_dataset.data_type for loaded_dataset in result] == ['fasttrack']
 
 
 # --------------------------------------------------------------------------------------------

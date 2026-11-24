@@ -32,7 +32,7 @@ in such cases, for example using the variables `gases_to_skip`,
 `sampling_heights_to_skip` or `deprecated_dobjs_to_use`.
 
 ### Creating and uploading ObsPack release files (per gas)
-**Steps 2 onward must be repeated per gas (CO₂, CH₄, N₂O, CO).**
+**Steps 2 onward must be repeated per gas (CO₂, CH₄, N₂O, CO, ²²²Rn, ¹⁴CO₂).**
 1. Go to [https://doi.icos-cp.eu/](https://doi.icos-cp.eu/) and create a draft
    DOI for the collection that will contain all datasets (`.nc` files) with
    data about all gases. Do not add any content to the draft DOI, as this will
@@ -133,8 +133,15 @@ in such cases, for example using the variables `gases_to_skip`,
 <hr>
 
 #### Yaml configuration
-- **gas**: which gas the current run concerns ('co2', 'ch4', 'n2o', and 'co' are
-  supported)
+- **gas**: which gas or tracer the current run concerns ('co2', 'ch4', 'n2o',
+  'co', 'rn' (radon-222) and '14co2' (radiocarbon in CO2) are supported).
+  Everything that is specific to one of them — the specifications of the data
+  objects to collect, the names of the columns holding the measurement and its
+  standard deviation, the units and wording used in the netCDF files, the unit
+  conversion, the calibration scale, the plot labels — is described by the
+  corresponding entry of `TRACERS` in
+  [tracers.py](src/icoscp_obspack/tracers.py). Supporting a new tracer means
+  adding an entry there and nothing else.
 - **doi**: DOI of the ICOS Obspack release that is going to be produced (see
   also the step-by-step explanations on how to use the application)
 - **all_gases_obspack_doi**: DOI of the ICOS Obspack collection that includes
@@ -223,7 +230,9 @@ in such cases, for example using the variables `gases_to_skip`,
   be updated during the run (defaults to False)
 - **use_mauna_loa_for_global_co2**: a boolean that controls whether the
   time-series from Mauna Loa is used instead of the marine BL global average as
-  a reference trend in figures of CO2 datasets (defaults to False)
+  a reference trend in figures of CO2 datasets (defaults to False). Only
+  relevant when **gas** is 'co2'. A global average reference is only available
+  for CO2, CH4 and N2O; the figures of the other tracers simply do not show one.
 - **use_flags**: a boolean that controls whether only data points with "good"
   quality flags are used in the generated data files (defaults to True)
 - **lab_numbers**: path to the `.csv` file containing information about

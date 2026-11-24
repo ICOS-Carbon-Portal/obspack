@@ -98,7 +98,9 @@ deprecated_dobjs_to_use: dict[str, dict[str, dict[float, list[str]]]] = {
     'co2': {},
     'ch4': {},
     'n2o': {},
-    'co': {}
+    'co': {},
+    'rn': {},
+    '14co2': {}
 }
 #replace_sampling_height: dict[str, dict[float, float]] = {
 #    'HUN': {48: 50}
