@@ -277,7 +277,7 @@ class DataWriter:
             'Analytical uncertainty parameters LTR, CMR and STTB are described in [Yver Kwok et al, 2015]'
             ' https://doi.org/10.5194/amt-8-3867-2015')
 
-        self.netcdf_dataset.createVariable('obs_flag', 'i1', ('time',), fill_value=1, zlib=True)
+        self.netcdf_dataset.createVariable('obs_flag', 'i1', ('time',), fill_value=INT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['obs_flag'].long_name = 'obs_flag'
         self.netcdf_dataset['obs_flag'].units = 'binary'
         self.netcdf_dataset['obs_flag'].comment = (
