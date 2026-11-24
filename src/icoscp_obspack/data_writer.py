@@ -234,13 +234,13 @@ class DataWriter:
             ' quality control, other flags denote incorrect data. Data processing at ICOS ATC is described'
             ' in [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
 
-        self.netcdf_dataset.createVariable('quality_id', 'i4', ('time',), fill_value=-9, zlib=True)
+        self.netcdf_dataset.createVariable('quality_id', 'i4', ('time',), fill_value=INT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['quality_id'].long_name = 'quality_id'
         self.netcdf_dataset['quality_id'].comment = (
             'Unique ID linking to the QC provenance - Data processing at ICOS ATC is described in'
             ' [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
 
-        self.netcdf_dataset.createVariable('instrument', 'i4', ('time',), fill_value=-9, zlib=True)
+        self.netcdf_dataset.createVariable('instrument', 'i4', ('time',), fill_value=INT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['instrument'].long_name = 'instrument_ID_to_detect_atmospheric_parameter'
         self.netcdf_dataset['instrument'].comment = \
             'Instrument ID used to detect atmospheric parameter. See provider_comment if available.'
@@ -487,8 +487,8 @@ class DataWriter:
         variables['icos_STTB'] = self.data['STTB'].array if 'STTB' in self.data.columns else np.zeros(self.data.shape[0])*np.nan
         variables['quality_id'] = (
             self.data['QualityId'].array if 'QualityId' in self.data.columns
-            else np.full(self.data.shape[0], -9))
-        variables['instrument'] = self.data['InstrumentId'].array if 'InstrumentId' in self.data.columns else -1
+            else np.full(self.data.shape[0], INT_FILL_VALUE))
+        variables['instrument'] = self.data['InstrumentId'].array if 'InstrumentId' in self.data.columns else INT_FILL_VALUE
         variables['obs_flag'] = 1
         variables['obs_num'] = np.arange(1, self.data.shape[0] + 1, 1)
         variables['obspack_num'] = np.arange(self.counter + 1, self.counter + self.data.shape[0] + 1, 1)
