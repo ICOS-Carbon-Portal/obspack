@@ -675,7 +675,7 @@ class DataWriter:
                         f" Included are (all whenever available) {data_types}."
                         f" It is part of {self.config.obspack_product_description} and is intended for use"
                         f" in carbon cycle inverse modeling, model evaluation, and satellite validation"
-                        f" studies. Metadata for the full {tracer.gas_species} product release are available"
+                        f" studies. Metadata for the full {tracer.species} product release are available"
                         f" at https://commons.datacite.org/doi.org/{self.config.doi}."
                         f" Please also visit http://www.gml.noaa.gov/ccgg/obspack/ for more information."
                         f" If you use these data in your research, please consider citing the full ObsPack"

@@ -31,7 +31,7 @@ from icoscp_obspack.tracers import (
 )
 
 TRACER = TRACERS['co2']
-GAS = TRACER.key
+TRACER_KEY = TRACER.key
 STATION = 'XXX'
 HEIGHT = 50.0
 
@@ -199,7 +199,7 @@ def test_a_deprecated_duplicate_is_concatenated_rather_than_discarded(monkeypatc
     """Objects listed in `deprecated_dobjs_to_use` extend the type instead of replacing it."""
     extra_hash = 'a' * 24
     monkeypatch.setitem(
-        mdp.deprecated_dobjs_to_use[GAS], STATION,
+        mdp.deprecated_dobjs_to_use[TRACER_KEY], STATION,
         {HEIGHT: [f'https://meta.icos-cp.eu/objects/{extra_hash}']})
 
     current = loaded('l2', 'L2', utc(2021), 24)
@@ -245,7 +245,7 @@ def test_an_older_duplicate_does_not_displace_the_dataset_in_place():
 # --------------------------------------------------------------------------------------------
 
 def raw_frame(
-        first: datetime, n_hours: int, flags: str, value_column: str = GAS,
+        first: datetime, n_hours: int, flags: str, value_column: str = TRACER_KEY,
         std_column: str = 'Stdev') -> pd.DataFrame:
     """A data file as `get_dataset` returns it, before normalisation."""
     stamps = [first + timedelta(hours=i) for i in range(n_hours)]
@@ -279,7 +279,7 @@ def test_load_datasets_normalises_columns(stub_get_dataset):
     data = result[0].data
     assert result[0].data_type == 'L2'
     assert {'JulDate', 'Meas', 'Datetime', 'Level'} <= set(data.columns)
-    assert GAS not in data.columns                      # renamed to 'Meas'
+    assert TRACER_KEY not in data.columns                      # renamed to 'Meas'
     assert data['Level'].unique().tolist() == [DATA_LEVEL_PER_TYPE['L2']]
     assert data['Datetime'].iloc[0] == utc(2020)
 
@@ -377,7 +377,7 @@ def test_load_datasets_accepts_the_fasttrack_specification_radon_shares_with_the
 def source_rows(**columns: list) -> pd.DataFrame:
     """A few source rows of CO2, good unless a 'Flag' column says otherwise."""
     n = len(next(iter(columns.values())))
-    defaults = {GAS: [400.0] * n, 'Stdev': [0.1] * n, 'NbPoints': [10] * n, 'Flag': ['O'] * n}
+    defaults = {TRACER_KEY: [400.0] * n, 'Stdev': [0.1] * n, 'NbPoints': [10] * n, 'Flag': ['O'] * n}
     return pd.DataFrame({**defaults, **columns})
 
 
@@ -397,16 +397,16 @@ def test_other_values_do_not_look_like_a_sentinel(value):
 
 
 def test_the_expected_sentinel_becomes_missing_and_its_good_flag_bad(capsys):
-    result = mask(source_rows(**{GAS: [400.0, -999.99, -999.99], 'Flag': ['O', 'O', 'N']}))
+    result = mask(source_rows(**{TRACER_KEY: [400.0, -999.99, -999.99], 'Flag': ['O', 'O', 'N']}))
 
-    assert result[GAS].iloc[0] == 400.0
-    assert result[GAS].iloc[1:].isna().all()
+    assert result[TRACER_KEY].iloc[0] == 400.0
+    assert result[TRACER_KEY].iloc[1:].isna().all()
     assert result['Flag'].tolist() == ['O', SENTINEL_VALUE_FLAG, 'N']
     assert '1 row(s) hold a sentinel value under a good flag' in capsys.readouterr().out
 
 
 def test_rows_are_kept():
-    dataset = source_rows(**{GAS: [-999.99, -999.99]})
+    dataset = source_rows(**{TRACER_KEY: [-999.99, -999.99]})
 
     assert len(mask(dataset)) == 2
 
@@ -416,7 +416,7 @@ def test_a_sentinel_only_masks_its_own_column():
     result = mask(source_rows(Stdev=[-9.99, 0.1]))
 
     assert result['Stdev'].isna().tolist() == [True, False]
-    assert result[GAS].tolist() == [400.0, 400.0]
+    assert result[TRACER_KEY].tolist() == [400.0, 400.0]
     assert result['Flag'].tolist() == ['O', 'O']
 
 
@@ -428,15 +428,15 @@ def test_the_flag_is_only_corrected_for_the_measured_value():
 
 
 def test_an_unexpected_sentinel_is_reported_and_masked(capsys):
-    result = mask(source_rows(Stdev=[-999.9, -999.9, 0.1], **{GAS: [-999990.0, 400.0, 400.0]}))
+    result = mask(source_rows(Stdev=[-999.9, -999.9, 0.1], **{TRACER_KEY: [-999990.0, 400.0, 400.0]}))
 
     assert result['Stdev'].isna().tolist() == [True, True, False]
-    assert result[GAS].isna().tolist() == [True, False, False]
+    assert result[TRACER_KEY].isna().tolist() == [True, False, False]
     assert result['Flag'].iloc[0] == SENTINEL_VALUE_FLAG
     out = capsys.readouterr().out
     assert 'column Stdev holds -999.9 on 2 row(s)' in out
     assert 'expected -9.99; masked' in out
-    assert f'column {GAS} holds -999990 on 1 row(s)' in out
+    assert f'column {TRACER_KEY} holds -999990 on 1 row(s)' in out
 
 
 def test_an_unexpected_sentinel_is_only_reported_where_negatives_are_valid(capsys):
@@ -474,17 +474,17 @@ def test_an_integer_sentinel_becomes_the_integer_fill_value():
 
 def test_columns_a_dataset_lacks_are_skipped():
     """Some historic files have no LTR, CMR or STTB."""
-    result = mask(source_rows(**{GAS: [-999.99]}))
+    result = mask(source_rows(**{TRACER_KEY: [-999.99]}))
 
     assert 'LTR' not in result.columns
 
 
 def test_the_source_dataset_is_left_untouched():
-    dataset = source_rows(**{GAS: [-999.99]})
+    dataset = source_rows(**{TRACER_KEY: [-999.99]})
 
     mask(dataset)
 
-    assert dataset[GAS].iloc[0] == -999.99
+    assert dataset[TRACER_KEY].iloc[0] == -999.99
     assert dataset['Flag'].iloc[0] == 'O'
 
 
@@ -499,7 +499,7 @@ def test_every_tracer_declares_the_sentinels_of_its_value_and_standard_deviation
 def test_load_datasets_masks_sentinels_before_filtering_flags(stub_get_dataset):
     """The corrected flag is what lets `use_flags` drop the row."""
     frame = raw_frame(utc(2020), 3, 'O')
-    frame.loc[1, GAS] = -999.99
+    frame.loc[1, TRACER_KEY] = -999.99
     stub_get_dataset['l2'] = frame
 
     filtered = load_datasets([StubDobj('l2', 'L2')], TRACER, True, 'unused', True)

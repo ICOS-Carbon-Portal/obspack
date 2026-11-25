@@ -104,7 +104,7 @@ class Tracer:
     # netCDF attribute. Empty for every tracer whose scale has not changed.
     scale_warning: str
     # Name of the measured species as it appears in the metadata of individual datasets.
-    gas_species: str
+    species: str
     # The measured quantity, as it appears in the comment of individual datasets, fitting in
     # 'observational timeseries in netCDF format of {metadata_quantity} collected at ...'.
     metadata_quantity: str
@@ -112,7 +112,7 @@ class Tracer:
     metadata_keyword: str
     # Specification of the ObsPack result objects, used when uploading individual datasets.
     obspack_obj_spec: str
-    plot_gas_label: str
+    plot_label: str
     plot_unit_label: str
     plot_limy: tuple[float, float]
     # Source column name -> the sentinel it holds in place of a missing value, for every column
@@ -123,7 +123,7 @@ class Tracer:
 
 def _greenhouse_gas(
         key: str, capitalized_key: str, spelled_out_name: str, conversion_factor: float,
-        calibration_scale: str, obspack_obj_spec: str, plot_gas_label: str, plot_unit_label: str,
+        calibration_scale: str, obspack_obj_spec: str, plot_label: str, plot_unit_label: str,
         plot_limy: tuple[float, float], first_dataset_id: int, scale_warning: str = '') -> Tracer:
     """Build the descriptor of a greenhouse gas measured as a dry air mole fraction.
 
@@ -149,11 +149,11 @@ def _greenhouse_gas(
         value_comment='mole per mole of dry air',
         calibration_scale=calibration_scale,
         scale_warning=scale_warning,
-        gas_species=key.upper(),
+        species=key.upper(),
         metadata_quantity=f'ambient mole fraction of {key.upper()} in dry air',
         metadata_keyword=f'atmospheric dry air {key} mole fraction',
         obspack_obj_spec=obspack_obj_spec,
-        plot_gas_label=plot_gas_label,
+        plot_label=plot_label,
         plot_unit_label=plot_unit_label,
         plot_limy=plot_limy,
         sentinels={key: Sentinel(-999.99), 'Stdev': Sentinel(-9.99), **COMMON_SENTINELS})
@@ -201,11 +201,11 @@ TRACERS: dict[str, Tracer] = {
         value_comment='222Rn activity concentration in air (Bq per m3)',
         calibration_scale='',
         scale_warning='',
-        gas_species='Rn',
+        species='Rn',
         metadata_quantity='222Rn activity concentration in air',
         metadata_keyword='atmospheric 222Rn activity concentration',
         obspack_obj_spec=f'{CPMETA}ObspackRnTimeSeriesResult',
-        plot_gas_label=r'$^{222}$Rn',
+        plot_label=r'$^{222}$Rn',
         plot_unit_label='[Bq/m³]',
         plot_limy=(0, 20),
         # Unlike the greenhouse gases, radon uses the value's sentinel for its standard
@@ -243,11 +243,11 @@ TRACERS: dict[str, Tracer] = {
             ' (1e-3)'),
         calibration_scale='',
         scale_warning='',
-        gas_species='14CO2',
+        species='14CO2',
         metadata_quantity='Delta-14C of atmospheric CO2',
         metadata_keyword='Delta-14C in atmospheric CO2',
         obspack_obj_spec=f'{CPMETA}obspack14CO2TimeSeriesResult',
-        plot_gas_label=r'$\Delta^{14}$C',
+        plot_label=r'$\Delta^{14}$C',
         plot_unit_label='[‰]',
         plot_limy=(-100, 100),
         sentinels={
