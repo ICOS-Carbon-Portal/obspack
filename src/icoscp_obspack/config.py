@@ -17,9 +17,9 @@ YAML_CONFIG = '../config.yml'
 
 @dataclass()
 class YamlConfig:
-    gas: str
+    tracer: str
     doi: str
-    all_gases_obspack_doi: str
+    all_tracers_obspack_doi: str
     dois_for_default_citations: list[str]
     obspack_product_description: str
     obspack_product_name: str | None
@@ -66,19 +66,19 @@ class Config:
         with open(YAML_CONFIG) as yaml_handler:
             config = YamlConfig(**yaml.safe_load(yaml_handler))
 
-        # Reject an unsupported gas before any other work is done, so that the failure is
+        # Reject an unsupported tracer before any other work is done, so that the failure is
         # reported here rather than as a missing attribute much later in the run.
-        if config.gas not in TRACERS:
-            possible_values = ', '.join(f"'{gas}'" for gas in TRACERS)
-            raise ValueError(f'Invalid gas: {config.gas}.\nPossible values are {possible_values}.')
+        if config.tracer not in TRACERS:
+            possible_values = ', '.join(f"'{key}'" for key in TRACERS)
+            raise ValueError(f'Invalid tracer: {config.tracer}.\nPossible values are {possible_values}.')
 
         # Directories to be created by `create_output_directories()`. Collected while the paths
         # below are resolved, so that constructing a Config does not touch the filesystem.
         self._directories_to_create: list[Path] = []
 
-        self.gas: str = config.gas
+        self.tracer: Tracer = TRACERS[config.tracer]
         self.doi: str = config.doi
-        self.all_gases_obspack_doi: str = config.all_gases_obspack_doi
+        self.all_tracers_obspack_doi: str = config.all_tracers_obspack_doi
         self.dois_for_default_citations: list[str] = config.dois_for_default_citations
         self.obspack_product_description: str = config.obspack_product_description
         self.obspack_product_name: str | None = config.obspack_product_name
@@ -119,11 +119,11 @@ class Config:
         self.useflags: bool = self._value_with_default(config.use_flags, True)
 
         self.input: Path = self._init_path(Path('input'), config.input)
-        self.output: Path = self._init_path(Path('output', config.gas), config.output)
+        self.output: Path = self._init_path(Path('output', config.tracer), config.output)
         self.doi_json_file: Path = self._init_path(
-            Path(self.output, f'doi_json_{config.gas}.json'), config.doi_json_file, 'file')
+            Path(self.output, f'doi_json_{config.tracer}.json'), config.doi_json_file, 'file')
         self.info_about_produced_files: Path = self._init_path(
-            Path(self.output, f'info_about_produced_files_for_{config.gas}.csv'),
+            Path(self.output, f'info_about_produced_files_for_{config.tracer}.csv'),
             config.info_about_produced_files, 'file')
         self.nc: Path = self._init_path(Path(self.output, 'nc'), config.nc)
         self.json: Path = self._init_path(Path(self.output, 'json'), config.json)
@@ -137,8 +137,6 @@ class Config:
             Path(self.input, 'lab_numbers.csv'), config.lab_numbers, 'file')
         self.file_icos_stations: Path = self._init_path(
             Path(self.input, 'icos_stations.csv'), config.icos_stations, 'file')
-
-        self.tracer: Tracer = TRACERS[config.gas]
 
         self.default_author_weight: int = self._value_with_default(config.default_author_weight, 0)
         self.print_timing_messages: bool = self._value_with_default(config.print_timing_messages, False)
@@ -181,7 +179,7 @@ class Config:
         return path
 
 def create_obspack_release_name(config: Config, dt: datetime | None = None) -> str:
-    elements = ['obspack', config.gas, '466']
+    elements = ['obspack', config.tracer.key, '466']
     if config.obspack_product_name is not None:
         elements.append(config.obspack_product_name)
     elements.append(config.obspack_product_version)

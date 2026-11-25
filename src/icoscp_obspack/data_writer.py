@@ -377,7 +377,7 @@ class DataWriter:
                 ' this dataset please use all alternatively named datasets that appear in this ObsPack'
                 ' product and the corresponding release of other ObsPacks if applicable.'),
             'dataset_alternative_names_comment': '',
-            'dataset_parameter': self.config.gas,
+            'dataset_parameter': self.config.tracer.key,
             'dataset_project': 'surface-insitu or tower-insitu',
             'dataset_platform': 'fixed',
             'dataset_map': (
@@ -680,7 +680,7 @@ class DataWriter:
                         f" Please also visit http://www.gml.noaa.gov/ccgg/obspack/ for more information."
                         f" If you use these data in your research, please consider citing the full ObsPack"
                         f" release that this file is part of"
-                        f" (https://commons.datacite.org/doi.org/{self.config.all_gases_obspack_doi})."),
+                        f" (https://commons.datacite.org/doi.org/{self.config.all_tracers_obspack_doi})."),
                     "creationDate": self.dataset_creation_data.isoformat().replace('+00:00', 'Z'),
                     "sources": self.hashsums
                 }

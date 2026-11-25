@@ -49,7 +49,7 @@ from icoscp_obspack.utils import timeit
 # a tracer is done by adding a descriptor there; nothing in this module branches on the tracer's
 # identity.
 
-# Maximum number of data objects that can be found for a given station and gas species.
+# Maximum number of data objects that can be found for a given station and tracer.
 # This limit is not expected to be reached anytime soon at any station, so it is not included
 # in the configuration file.
 n_max_dobj = 200
@@ -85,8 +85,8 @@ additional_authors: dict[str, list[Author]] = {
         )]
 }
 
-# Gases to skip for some station (to be revised before each ObsPack release).
-gases_to_skip: dict[str, list[str]] = {
+# Tracers to skip for some station (to be revised before each ObsPack release).
+tracers_to_skip: dict[str, list[str]] = {
     'HEL': ['co'], 'HUN': ['n2o'], 'IPR': ['n2o'], 'PAL': ['n2o'], 'UTO': ['n2o'], 'WES': ['co']}
 
 # Sampling heights to skip for some stations (to be revised before each ObsPack release).
@@ -122,11 +122,11 @@ class LoadedDataset:
     data: pd.DataFrame
 
 def main():
-    # The gas is validated by Config, which also resolves the application's paths.
+    # The tracer is validated by Config, which also resolves the application's paths.
     c = Config()
     c.create_output_directories()
     print(
-        f'Running ObsPack application for gas "{c.gas}"...'
+        f'Running ObsPack application for tracer "{c.tracer.key}"...'
         f'\nObsPack product name: {create_obspack_release_name(c)}'
         f'\nTitle for DOI: {c.title_for_doi}'
         f'\nDescription for DOI: {c.description_for_doi}'
@@ -143,8 +143,8 @@ def main():
     n_stations = len(meta_stations)
     for n, station in enumerate(meta_stations):
         print(f'\n\n{"-"*122}\nStation {station.id} ({n+1}/{n_stations})\n{"-"*122}')
-        if station.id in gases_to_skip.keys() and c.gas in gases_to_skip[station.id]:
-            print(f'Skipping station {station.id} (see dict `gases_to_skip`).')
+        if station.id in tracers_to_skip.keys() and c.tracer.key in tracers_to_skip[station.id]:
+            print(f'Skipping station {station.id} (see dict `tracers_to_skip`).')
             continue
         fetching_station_info_start_time = datetime.now(tz=timezone.utc)
         station_meta = meta.get_station_meta(station.uri)
@@ -286,15 +286,15 @@ def main():
 
     # Handle authors to the Obspack collection.
     collection_authors_cleaned = clean_and_sort_authors(collection_authors, c.default_author_weight)
-    with open(Path(c.output, f'authors_{c.gas}.pkl'), 'wb') as authors_file:
+    with open(Path(c.output, f'authors_{c.tracer.key}.pkl'), 'wb') as authors_file:
         pickle.dump(collection_authors_cleaned, authors_file)
     # Save JSON to be pasted in the DOI app for minting the DOI of the Obspack release.
     produce_doi_meta(c, collection_authors_cleaned, geo_locations)
     # Save contributor and creator info as json for the DOI minting.
     # These files are not needed anymore since the JSON created in the previous step includes
     # all information about creators and contributors, but it is kept here as legacy.
-    path_to_creators_file = Path(c.output, f'creators_{c.gas}.json')
-    path_to_contributors_file = Path(c.output, f'contributors_{c.gas}.json')
+    path_to_creators_file = Path(c.output, f'creators_{c.tracer.key}.json')
+    path_to_contributors_file = Path(c.output, f'contributors_{c.tracer.key}.json')
     with open(path_to_creators_file, 'w') as creators_file:
         creators_file.write(citation(collection_authors_cleaned, as_contrib=False))
     with open(path_to_contributors_file, 'w') as contributors_file:
@@ -302,8 +302,8 @@ def main():
     # Save GeoJSON of station locations. The GeoJSON can be used when uploading the Obspack release
     # to the data portal.
     geo_json = GeoJson(features=geo_features, type='FeatureCollection')
-    save_geo_json(geo_json, Path(c.output, f'GeoJSON_{c.gas}.json'))
-    save_geo_json_pickle(geo_json, Path(c.output, f'GeoJSON_{c.gas}.pkl'))
+    save_geo_json(geo_json, Path(c.output, f'GeoJSON_{c.tracer.key}.json'))
+    save_geo_json_pickle(geo_json, Path(c.output, f'GeoJSON_{c.tracer.key}.pkl'))
     # Wait for the DOI to be minted before continuing
     user_input = None
     while user_input is None:
@@ -332,11 +332,11 @@ def main():
             # If a station has one measurement height, it is considered a "surface-insitu".
             if n_heights > 1:
                 filename = '_'.join([
-                    c.gas, station_id.lower(), 'tower-insitu', str(station_extra_info.lab_id),
+                    c.tracer.key, station_id.lower(), 'tower-insitu', str(station_extra_info.lab_id),
                     f'{int(sampling_height)}magl'])
             else:
                 filename = '_'.join([
-                    c.gas, station_id.lower(), 'surface-insitu', str(station_extra_info.lab_id),
+                    c.tracer.key, station_id.lower(), 'surface-insitu', str(station_extra_info.lab_id),
                     f'{int(sampling_height)}magl'])
 
             if c.do_png:

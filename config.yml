@@ -1,6 +1,6 @@
-gas: 'co'
+tracer: 'co'
 doi: '10.18160/M3VW-DRM5'
-all_gases_obspack_doi: '10.18160/ERAF-JSPW'
+all_tracers_obspack_doi: '10.18160/ERAF-JSPW'
 dois_for_default_citations:
   - '10.18160/PP29-9CNZ'
   - '10.18160/ATM_NRT_CO2_CH4'

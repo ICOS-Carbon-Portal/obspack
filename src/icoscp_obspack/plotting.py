@@ -100,22 +100,22 @@ def plot_timeseries_station(
 
 
 def get_global_average(c: Config) -> pd.DataFrame:
-    if c.gas == 'co2' and c.use_mauna_loa_for_global_co2:
+    if c.tracer.key == 'co2' and c.use_mauna_loa_for_global_co2:
         # Get the most recent Mauna Loa CO2 data.
         url = 'https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.txt'
         skip_rows = 37
         names = ['JulDate', 'Meas']
         cols = [3, 4]
         global_avg_path = Path(c.output, 'co2_weekly_mlo.txt')
-    elif c.gas in ['co2', 'ch4', 'n2o']:
+    elif c.tracer.key in ['co2', 'ch4', 'n2o']:
         # Get the most recent monthly marine BL global averages.
-        url = f'https://gml.noaa.gov/webdata/ccgg/trends/{c.gas}/{c.gas}_mm_gl.txt'
-        skip_rows = 58 if c.gas == 'co2' else 65
+        url = f'https://gml.noaa.gov/webdata/ccgg/trends/{c.tracer.key}/{c.tracer.key}_mm_gl.txt'
+        skip_rows = 58 if c.tracer.key == 'co2' else 65
         names = ['JulDate', 'Meas', 'Trend']
         cols = [2, 3, 5]
-        global_avg_path = Path(c.output, f'{c.gas}_mm_gl.txt')
+        global_avg_path = Path(c.output, f'{c.tracer.key}_mm_gl.txt')
     else:
-        print(f'No global average data is available for gas {c.gas}.')
+        print(f'No global average data is available for tracer {c.tracer.key}.')
         return pd.DataFrame(columns=['JulDate', 'Meas', 'Trend'])
     try:
         global_avg = pd.read_csv(
