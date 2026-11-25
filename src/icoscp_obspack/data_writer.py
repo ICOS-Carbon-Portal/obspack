@@ -2,6 +2,7 @@
 import datetime as dt
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,14 @@ INT_FILL_VALUE = -9
 # How a missing float value is written to the .txt files. Only needed because NaN has no textual
 # representation of its own; a numeric `FLOAT_FILL_VALUE` would be written as itself instead.
 TXT_FLOAT_FILL_VALUE = '-999999'
+
+# Separates an attribute's name from its value in the header of the .txt files, as in NOAA's
+# ObsPack products ('# site_code : HPB', '# value:units : mol mol-1').
+TXT_HEADER_SEPARATOR = ' : '
+
+# Variables holding a measurement in the units of the tracer, converted from the source units
+# before being written.
+MEASUREMENT_VARIABLES = ['value', 'value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB']
 
 # Hard-coded country codes for stations that are missing one in the ICOS metadata
 COUNTRY_CODE = {'INE': 'CY', 'VTI': 'IE'}
@@ -106,6 +115,9 @@ class DataWriter:
         self._fill_netcdf_variables(variables)
         time_after_filling_variables = timeit(time_after_filling_attributes, f'    Fill netCDF variables for {self.filename}', self.config.print_timing_messages)
         self.netcdf_dataset.sync()
+        # The .txt mirror writes every variable in the type it has in the netCDF file.
+        self.variable_dtypes = {
+            name: variable.dtype for name, variable in self.netcdf_dataset.variables.items()}
         time_after_syncing_netcdf = timeit(time_after_filling_variables, f'    Sync netCDF for {self.filename}', self.config.print_timing_messages)
         self.netcdf_dataset.close()
         time_after_closing_netcdf = timeit(time_after_syncing_netcdf, f'    Close netCDF for {self.filename}', self.config.print_timing_messages)
@@ -512,18 +524,26 @@ class DataWriter:
                 var_shape = self.netcdf_dataset[variable].shape
                 self.netcdf_dataset[variable][:] = \
                     np.array(values, f"S{var_shape[1]}").view("S1").reshape(var_shape)
-            elif variable in ['value', 'value_std_dev', 'icos_LTR', 'icos_SMR', 'icos_STTB']:
-                new_values = values*self.config.tracer.conversion_factor
-                # Negative values are impossible for a mole fraction, but valid for tracers such
-                # as Delta-14C. `icos_STTB` is a bias and is always allowed to be negative.
-                # Sentinels are already gone by now; this only removes genuine negatives.
-                if variable != 'icos_STTB' and self.config.tracer.clip_negatives:
-                    new_values[new_values < 0] = np.nan
+            elif variable in MEASUREMENT_VARIABLES:
+                new_values = self._convert_measurement(variable, values)
                 # Missing values are NaN in memory, whatever the fill value of the file.
                 new_values = np.where(np.isnan(new_values), FLOAT_FILL_VALUE, new_values)
                 self.netcdf_dataset[variable][:] = new_values
             else:
                 self.netcdf_dataset[variable][:] = values
+
+    def _convert_measurement(self, variable: str, values: Any) -> np.ndarray:
+        """
+        Convert a measurement variable to the units declared in the files, the same for the
+        netCDF file and its .txt mirror. Missing values stay NaN.
+        """
+        new_values = np.asarray(values, dtype=float) * self.config.tracer.conversion_factor
+        # Negative values are impossible for a mole fraction, but valid for tracers such as
+        # Delta-14C. `icos_STTB` is a bias and is always allowed to be negative. Sentinels are
+        # already gone by now; this only removes genuine negatives.
+        if variable != 'icos_STTB' and self.config.tracer.clip_negatives:
+            new_values[new_values < 0] = np.nan
+        return new_values
 
     def _produce_csv_file(self, variables: dict[str, Any]):
         start_time = dt.datetime.now(dt.timezone.utc)
@@ -531,7 +551,8 @@ class DataWriter:
             'datetime', 'year', 'month', 'day', 'hour', 'minute', 'second',
             'time', 'start_time', 'time_decimal', 'value', 'value_std_dev', 'nvalue',
             'qc_flag', 'icos_datalevel', 'icos_LTR', 'icos_SMR', 'icos_STTB', 'quality_id', 'instrument',
-            'latitude', 'longitude', 'altitude', 'intake_height', 'obs_num', 'obspack_num', 'obspack_id'
+            'latitude', 'longitude', 'altitude', 'intake_height', 'obs_flag', 'obs_num', 'obspack_num',
+            'obspack_id'
         ]
         index: pd.DatetimeIndex = self.data.index
         time_components: dict[str, Any] = {
@@ -545,12 +566,21 @@ class DataWriter:
         csv_data = pd.DataFrame(columns=order_of_variables)
         time_after_initializing_csv = timeit(start_time, f'        Initialize CSV data table for {self.filename}', self.config.print_timing_messages)
         for variable in order_of_variables:
-            if variable in variables.keys():
+            if variable in MEASUREMENT_VARIABLES:
+                csv_data[variable] = self._convert_measurement(variable, variables[variable])
+            elif variable in variables.keys():
                 csv_data[variable] = variables[variable]
             elif variable in ['year', 'month', 'day', 'hour', 'minute', 'second']:
                 csv_data[variable] = time_components[variable]
             else:
                 print(f'Variable {variable} is not defined but is requested by the CSV file, skipping.')
+        # Float variables are written in their netCDF type, which pandas prints at the shortest
+        # length that represents the value exactly: '0.000405536' for a float32 mole fraction,
+        # all digits for the float64 decimal time. Fixed decimals would lose the mole fractions.
+        for variable in csv_data.columns:
+            dtype = self.variable_dtypes.get(variable)
+            if dtype is not None and np.issubdtype(dtype, np.floating):
+                csv_data[variable] = csv_data[variable].astype(dtype)
         time_after_filling_csv = timeit(time_after_initializing_csv, f'        Fill CSV data table for {self.filename}', self.config.print_timing_messages)
         csv_path = Path(self.config.txt, f'{self.filename}.txt')
         skipped_variables = set(variables.keys()).difference(set(order_of_variables))
@@ -561,7 +591,7 @@ class DataWriter:
                 csv_file.write(f'{line}\n')
         time_after_writing_csv_header = timeit(time_after_creating_csv_header, f'        Write header for CSV {self.filename}', self.config.print_timing_messages)
         csv_data.to_csv(
-            csv_path, mode='a', sep=' ', na_rep=TXT_FLOAT_FILL_VALUE, header=True, index=False, float_format='%.5f')
+            csv_path, mode='a', sep=' ', na_rep=TXT_FLOAT_FILL_VALUE, header=True, index=False)
         _ = timeit(time_after_writing_csv_header, f'        Write CSV data for {self.filename}', self.config.print_timing_messages)
 
     def _create_txt_header(self, skipped_variables: set[str]) -> list[str]:
@@ -579,16 +609,20 @@ class DataWriter:
                 index_of_separator = cleaned_line.find(' = ')
                 key = cleaned_line[:index_of_separator]
                 val = cleaned_line[index_of_separator + 3:]
+                # ncdump quotes text values and leaves numbers bare.
+                val = val.strip('"') if val.startswith('"') else without_ncdump_type_suffixes(val)
                 if key.startswith(':'):
-                    header_filtered.append(' = '.join([f'# {key[1:]}', val.strip('"')]))
+                    header_filtered.append(TXT_HEADER_SEPARATOR.join([f'# {key[1:]}', val]))
                 elif key.startswith('string :'):
-                    header_filtered.append(' = '.join([f'# {key[8:]}', val.strip('"')]))
+                    header_filtered.append(TXT_HEADER_SEPARATOR.join([f'# {key[8:]}', val]))
                 elif key.split(':')[0] not in skipped_variables:
-                    header_variables.append(' = '.join([f'# {key}', val.strip('"')]))
+                    header_variables.append(TXT_HEADER_SEPARATOR.join([f'# {key}', val]))
         header_variables.append('#')
         header_variables.append('# VARIABLE ORDER')
         header_variables.append('#')
-        h_len = len(header_template) + len(header_filtered) + len(header_variables) + 1
+        # As in NOAA's ObsPack products, the count includes this first line and the line naming
+        # the columns that follows the header proper, so that it is the line number of the latter.
+        h_len = len(header_template) + len(header_filtered) + len(header_variables) + 2
 
         txt_header: list[str] = [f'# header_lines : {h_len}']
         for header_line in header_template:
@@ -665,6 +699,20 @@ class DataWriter:
             metadata_for_upload["isNextVersionOf"] = [hashsum_of_previous_version]
 
         return metadata_for_upload
+
+
+# The type suffix ncdump appends to a number in its CDL output: 'b' (byte), 's' (short), 'f'
+# (float), 'L'/'LL' (64-bit integer) and the unsigned 'UB', 'US', 'U', 'UL', 'ULL'.
+NCDUMP_TYPE_SUFFIX = re.compile(r'(?<=[0-9.NaInfity])(?:UB|US|ULL|UL|U|LL|L|b|s|f)$')
+
+
+def without_ncdump_type_suffixes(value: str) -> str:
+    """
+    Remove the type suffixes ncdump appends to numbers ('-9b' -> '-9', 'NaNf' -> 'NaN',
+    '1019LL' -> '1019'), so that the .txt header reads like NOAA's. `value` is a bare, numeric
+    ncdump value, possibly a comma-separated list of them.
+    """
+    return ', '.join(NCDUMP_TYPE_SUFFIX.sub('', number) for number in value.split(', '))
 
 
 def _enumerate(items: list[str]) -> str:
