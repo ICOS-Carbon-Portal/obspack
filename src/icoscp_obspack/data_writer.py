@@ -129,7 +129,7 @@ class DataWriter:
 
         self.netcdf_dataset.createVariable('time', 'i4', ('time',), zlib=True)
         self.netcdf_dataset['time'].standard_name = 'time'
-        self.netcdf_dataset['time'].longname = 'sample_time_in_seconds_since_january_1_1970'
+        self.netcdf_dataset['time'].long_name = 'sample_time_in_seconds_since_january_1_1970'
         self.netcdf_dataset['time'].units = 'seconds since 1970-01-01T00:00:00Z'
         self.netcdf_dataset['time'].comment = (
             'POSIX time. Number of seconds since January 1, 1970 in UTC. Time-averaged values are reported'
@@ -138,7 +138,7 @@ class DataWriter:
             ' through global attribute dataset_data_frequency (per hour)')
 
         self.netcdf_dataset.createVariable('start_time', 'i4', ('time',), zlib=True)
-        self.netcdf_dataset['start_time'].longname = 'sample_time_in_seconds_since_january_1_1970'
+        self.netcdf_dataset['start_time'].long_name = 'sample_start_time_in_seconds_since_january_1_1970'
         self.netcdf_dataset['start_time'].units = 'seconds since 1970-01-01T00:00:00Z'
         self.netcdf_dataset['start_time'].comment = (
             'POSIX time. Number of seconds since January 1, 1970 in UTC. Time-averaged values are reported'
@@ -147,7 +147,7 @@ class DataWriter:
             ' through global attribute dataset_data_frequency (per hour)')
 
         self.netcdf_dataset.createVariable('datetime', 'S1', ('time', 'string_of_20chars',), zlib=True)
-        self.netcdf_dataset['datetime'].longname = 'air_sample_date_and_time_in_UTC'
+        self.netcdf_dataset['datetime'].long_name = 'air_sample_date_and_time_in_UTC'
         self.netcdf_dataset['datetime'].comment = (
             'Air sample date and time in UTC ISO 8601 format. Time-averaged values are reported at'
             ' the midpoint of the averaging interval (dataset_data_frequency). For uneven averaging'
@@ -155,7 +155,7 @@ class DataWriter:
             ' through global attribute dataset_data_frequency (per hour)')
 
         self.netcdf_dataset.createVariable('time_decimal', 'f8', ('time',), zlib=True)
-        self.netcdf_dataset['time_decimal'].longname = 'sample_decimal_year_in_UTC'
+        self.netcdf_dataset['time_decimal'].long_name = 'sample_decimal_year_in_UTC'
         self.netcdf_dataset['time_decimal'].comment = (
             'Decimal year in UTC. Time-averaged values are reported at the midpoint of the averaging'
             ' interval (dataset_data_frequency). For uneven averaging intervals times are rounded down to'
@@ -163,7 +163,7 @@ class DataWriter:
 
         self.netcdf_dataset.createVariable(
             'time_components', 'i2', ('time', 'calendar_components',), fill_value=-9, zlib=True)
-        self.netcdf_dataset['time_components'].longname = 'integer_components_of_UTC_date/time'
+        self.netcdf_dataset['time_components'].long_name = 'integer_components_of_UTC_date/time'
         self.netcdf_dataset['time_components'].order = 'year, month, day, hour, minute, second'
         self.netcdf_dataset['time_components'].comment = (
             'Calendar time components as integers. Times and dates are UTC. Time-averaged values are'
@@ -172,7 +172,7 @@ class DataWriter:
 
         self.netcdf_dataset.createVariable(
             'solartime_components', 'i2', ('time', 'calendar_components',), fill_value=-9, zlib=True)
-        self.netcdf_dataset['solartime_components'].longname = 'integer_components_of_local_solar_date/time'
+        self.netcdf_dataset['solartime_components'].long_name = 'integer_components_of_local_solar_date/time'
         self.netcdf_dataset['solartime_components'].order = 'year, month, day, hour, minute, second'
         self.netcdf_dataset['solartime_components'].comment = (
             'Calendar local solar time components as integers. UTC time is converted to local solar'
@@ -205,31 +205,41 @@ class DataWriter:
             ' See provider_comment if available.')
 
         self.netcdf_dataset.createVariable('latitude', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
+        self.netcdf_dataset['latitude'].standard_name = 'latitude'
         self.netcdf_dataset['latitude'].long_name = 'sample_latitude_in_decimal_degrees'
-        self.netcdf_dataset['latitude'].units = 'decimal degrees north (-90..90)'
+        self.netcdf_dataset['latitude'].units = 'degrees_north'
         self.netcdf_dataset['latitude'].comment = 'Latitude at which air sample was collected.'
 
         self.netcdf_dataset.createVariable('longitude', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
+        self.netcdf_dataset['longitude'].standard_name = 'longitude'
         self.netcdf_dataset['longitude'].long_name = 'sample_longitude_in_decimal_degrees'
-        self.netcdf_dataset['longitude'].units = 'decimal degrees east (-180..180)'
-        self.netcdf_dataset['longitude'].comment = 'Longitude at which air sample was collected.'
+        self.netcdf_dataset['longitude'].units = 'degrees_east'
+        self.netcdf_dataset['longitude'].comment = (
+            'Longitude at which air sample was collected using a range of -180 degrees to +180 degrees.')
 
         self.netcdf_dataset.createVariable('altitude', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
+        self.netcdf_dataset['altitude'].standard_name = 'altitude'
         self.netcdf_dataset['altitude'].long_name = 'sample_altitude_in_meters_above_sea_level'
-        self.netcdf_dataset['altitude'].units = 'meters above sea level (masl)'
+        self.netcdf_dataset['altitude'].units = 'm'
         self.netcdf_dataset['altitude'].comment = \
-            'Altitude (surface elevation plus sample intake height) at which air sample was collected'
+            'Altitude (in meters above sea level). See provider_comment if available.'
+        self.netcdf_dataset['altitude'].provider_comment = (
+            'Altitude for this dataset is the sum of surface elevation (masl) and sample intake height'
+            ' (magl).')
 
         self.netcdf_dataset.createVariable('intake_height', 'f4', ('time',), fill_value=FLOAT_FILL_VALUE, zlib=True)
         self.netcdf_dataset['intake_height'].long_name = \
-            'Height above ground at which air sample was collected'
-        self.netcdf_dataset['intake_height'].units = 'meters above ground level (magl)'
+            'sample_intake_height_in_meters_above_ground_level'
+        self.netcdf_dataset['intake_height'].units = 'm'
         self.netcdf_dataset['intake_height'].comment = \
-            'Sample intake height in meters above ground level (magl)'
+            'Sample intake height in meters above ground level (magl). See provider_comment if available.'
 
         self.netcdf_dataset.createVariable('qc_flag', 'S1', ('time',), fill_value='-', zlib=True)
         self.netcdf_dataset['qc_flag'].long_name = 'quality_control_flag'
         self.netcdf_dataset['qc_flag'].comment = (
+            'This quality control flag is provided by the contributing PIs. See provider_comment if'
+            ' available.')
+        self.netcdf_dataset['qc_flag'].provider_comment = (
             '- Flag U = data correct before manual quality control - Flag O = data correct after manual'
             ' quality control, other flags denote incorrect data. Data processing at ICOS ATC is described'
             ' in [Hazan et al., 2016], doi:10.5194/amt-9-4719-2016.')
@@ -285,11 +295,10 @@ class DataWriter:
             ' influence). The implementation of this flag is still being developed.')
 
         self.netcdf_dataset.createVariable('obspack_id', 'S1', ('time', 'string_of_200chars',), zlib=True)
-        self.netcdf_dataset['obspack_id'].long_name = 'obs_flag'
+        self.netcdf_dataset['obspack_id'].long_name = 'unique_ObsPack_identification_string'
         self.netcdf_dataset['obspack_id'].comment = (
-            'Unique identification string that distinguishes the data item from all other data items'
-            ' both within an ObsPack product, and across any ObsPack data product. It includes obspack_name,'
-            ' dataset_name, and obspack_num, with each field delimited by a tilde (~).')
+            'ObsPack observation identification string. Unique across ALL ObsPack data products. Includes'
+            ' Obspack name, data set name, and ObsPack observation number delimited by a tilde (~).')
 
         self.netcdf_dataset.createVariable('assimilation_concerns', 'i1', ('time', 'dim_concerns'), zlib=True)
         self.netcdf_dataset['assimilation_concerns'].long_name = 'assimilation_concerns'
