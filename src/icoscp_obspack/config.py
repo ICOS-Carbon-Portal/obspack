@@ -96,7 +96,7 @@ class Config:
             config.resource_type_for_doi, 'compressed ZIP archive')
         self.format_info_for_doi: str = self._value_with_default(
             config.format_info_for_doi, (
-                'Compressed ZIP archive of netcdf and ASCII files with semicolon separated columns.'
+                'Compressed ZIP archive of netcdf and ASCII files with space-separated columns.'
                 ' Overview pictures of recent data and trend plots since 2010 are provided as bitmaps'
                 ' in png format.')
             )

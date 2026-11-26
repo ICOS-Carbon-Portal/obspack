@@ -190,7 +190,7 @@ in such cases, for example using the variables `tracers_to_skip`,
   creation (defaults to "compressed ZIP archive")
 - **format_info_for_doi**: explanations about the content of the file included
   in the ObsPack release (defaults to "Compressed ZIP archive of netcdf and
-  ASCII files with semicolon separated columns. Overview pictures of recent data
+  ASCII files with space-separated columns. Overview pictures of recent data
   and trend plots since 2010 are provided as bitmaps in png format.")
 - **rights_for_doi**: license under which the ObsPack release is published
   (defaults to "Creative Commons Attribution 4.0 International")
